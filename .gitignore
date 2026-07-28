@@ -1,0 +1,10 @@
+# Local environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Common local files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
