@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,96 +16,220 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
-// ─── Types ─────────────────────────────────────────────────────────────────
+import { getValidAccessToken } from '@/lib/supabase';
+
+// ─── Types (API_SPEC_POLARIS_DEVELOP_2026_08_02) ───────────────────────────
 
 type Step = 1 | 2 | 3 | 4;
 
+/** 백엔드 NORTH_STAR_SELECTED_COUNT — 선택 성단은 정확히 5개 */
+const NORTH_STAR_SELECTED_COUNT = 5;
+
+/** POST /api/v1/onboarding/north-star/analyze → candidates[] item */
 interface Candidate {
   category: string;
+  score: number;
+  recommended: boolean;
   reason: string;
+  evidence?: string[];
 }
 
+/** POST /api/v1/onboarding/north-star/analyze — 200 OK */
 interface AnalyzeResponse {
   analysis_id: string;
   candidates: Candidate[];
 }
 
+/** PUT /api/v1/onboarding/north-star — 200 OK (OnboardingStatusResponse) */
 interface NorthStarSaveResponse {
   onboarding_completed: boolean;
   north_star: {
     text: string;
     selected_categories: string[];
+  } | null;
+}
+
+interface ApiErrorDetail {
+  code?: string;
+  message?: string;
+}
+
+// ─── Alerts (web + native) ─────────────────────────────────────────────────
+
+function showAlert(title: string, message: string) {
+  if (Platform.OS === 'web') {
+    const win =
+      typeof globalThis !== 'undefined'
+        ? (globalThis as { window?: Window; alert?: (msg: string) => void })
+        : undefined;
+    if (win?.window?.alert) {
+      win.window.alert(`${title}\n\n${message}`);
+      return;
+    }
+    if (typeof win?.alert === 'function') {
+      win.alert(`${title}\n\n${message}`);
+      return;
+    }
+  }
+  Alert.alert(title, message);
+}
+
+// ─── API client ────────────────────────────────────────────────────────────
+
+const buildApiUrl = (endpointPath: string): string => {
+  let baseUrl =
+    process.env.EXPO_PUBLIC_API_BASE_URL ||
+    process.env.EXPO_PUBLIC_API_URL ||
+    'http://localhost:8000';
+
+  // 1) 맨 뒤 슬래시(/) 제거
+  baseUrl = baseUrl.replace(/\/+$/, '');
+
+  // 2) baseUrl 끝에 이미 /api/v1이 있으면 제거 (중복 방지)
+  if (baseUrl.endsWith('/api/v1')) {
+    baseUrl = baseUrl.slice(0, -'/api/v1'.length);
+  }
+
+  // 3) endpointPath가 /로 시작하지 않으면 붙여주기
+  const formattedPath = endpointPath.startsWith('/')
+    ? endpointPath
+    : `/${endpointPath}`;
+
+  // 4) baseUrl + formattedPath
+  return `${baseUrl}${formattedPath}`;
+};
+
+async function buildHeaders(): Promise<Record<string, string>> {
+  const accessToken = await getValidAccessToken();
+  return {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${accessToken}`,
   };
 }
 
-const MOCK_ANALYSIS_ID = 'mock_analysis_999';
+/** Map known backend detail.code values to FE guidance messages. */
+function messageForErrorCode(code: string | undefined, fallback: string): string {
+  switch (code) {
+    case 'NORTH_STAR_SEASON_LOCKED':
+      return '현재 계절 동안은 북극성을 수정할 수 없습니다.';
+    case 'INVALID_SELECTION':
+      return '성단은 정확히 5개를 선택해야 합니다.';
+    case 'ANALYSIS_EXPIRED':
+      return '분석 결과가 만료되었습니다. 다시 시도해 주세요.';
+    default:
+      return fallback;
+  }
+}
 
-const MOCK_CANDIDATES: Candidate[] = [
-  { category: '가족', reason: '소중한 사람들과의 관계' },
-  { category: '건강', reason: '신체적/정신적 활력' },
-  { category: '성장', reason: '새로운 배움과 도전' },
-  { category: '성공', reason: '목표 달성과 성취' },
-  { category: '관계', reason: '진실된 소통' },
-  { category: '자유', reason: '주도적인 삶' },
-  { category: '평화', reason: '마음의 안점감' },
-];
+function extractErrorDetail(data: unknown): ApiErrorDetail {
+  if (!data || typeof data !== 'object' || !('detail' in data)) {
+    return {};
+  }
+  const detail = (data as { detail: unknown }).detail;
+  if (detail && typeof detail === 'object') {
+    const obj = detail as { code?: unknown; message?: unknown };
+    return {
+      code: typeof obj.code === 'string' ? obj.code : undefined,
+      message: typeof obj.message === 'string' ? obj.message : undefined,
+    };
+  }
+  if (typeof detail === 'string') {
+    return { message: detail };
+  }
+  return {};
+}
 
-// ─── API ───────────────────────────────────────────────────────────────────
+class ApiRequestError extends Error {
+  url: string;
+  status: number | null;
+  code: string | null;
 
-const API_BASE =
-  process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '') || 'http://localhost:8000';
+  constructor(
+    message: string,
+    url: string,
+    status: number | null,
+    code: string | null = null,
+  ) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.url = url;
+    this.status = status;
+    this.code = code;
+  }
+}
+
+function formatApiErrorAlert(error: unknown): string {
+  if (error instanceof ApiRequestError) {
+    const parts = ['[API 에러]'];
+    if (error.status != null) parts.push(String(error.status));
+    if (error.code) parts.push(error.code);
+    parts.push(error.message);
+    return `${parts.join(' ')}\nURL: ${error.url}`;
+  }
+  if (error instanceof Error && error.message) {
+    return `[API 에러] ${error.message}`;
+  }
+  return '[API 에러] Failed to fetch';
+}
 
 async function apiRequest<T>(
   method: 'POST' | 'PUT',
-  path: string,
+  endpointPath: string,
   body: unknown,
 ): Promise<T> {
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    'Content-Type': 'application/json',
-  };
-  const token = process.env.EXPO_PUBLIC_ACCESS_TOKEN;
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+  const url = buildApiUrl(endpointPath);
+  console.log('API request URL:', url);
+
+  const headers = await buildHeaders();
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers,
+      body: JSON.stringify(body),
+    });
+  } catch (networkError) {
+    const message =
+      networkError instanceof Error && networkError.message
+        ? networkError.message
+        : 'Failed to fetch';
+    throw new ApiRequestError(message, url, null, null);
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers,
-    body: JSON.stringify(body),
-  });
-
+  const raw = await response.text();
   let data: unknown = null;
-  const text = await response.text();
-  if (text) {
+  if (raw) {
     try {
-      data = JSON.parse(text);
+      data = JSON.parse(raw);
     } catch {
       data = null;
     }
   }
 
   if (!response.ok) {
-    const detail =
-      data &&
-      typeof data === 'object' &&
-      'detail' in data &&
-      data.detail &&
-      typeof data.detail === 'object' &&
-      'message' in (data.detail as object)
-        ? String((data.detail as { message: unknown }).message)
-        : data &&
-            typeof data === 'object' &&
-            'detail' in data &&
-            typeof (data as { detail: unknown }).detail === 'string'
-          ? (data as { detail: string }).detail
-          : `요청에 실패했습니다 (${response.status})`;
-    throw new Error(detail);
+    const detail = extractErrorDetail(data);
+    const fallback =
+      detail.message ||
+      (raw.trim()
+        ? raw.length > 200
+          ? `${raw.slice(0, 200)}…`
+          : raw
+        : response.statusText || `요청에 실패했습니다 (${response.status})`);
+    const message = messageForErrorCode(detail.code, fallback);
+    throw new ApiRequestError(
+      message,
+      url,
+      response.status,
+      detail.code ?? null,
+    );
   }
 
   return data as T;
 }
 
+/** POST /api/v1/onboarding/north-star/analyze */
 function analyzeNorthStar(text: string) {
   return apiRequest<AnalyzeResponse>(
     'POST',
@@ -112,11 +238,16 @@ function analyzeNorthStar(text: string) {
   );
 }
 
+/** PUT /api/v1/onboarding/north-star */
 function saveNorthStar(analysisId: string, selectedCategories: string[]) {
-  return apiRequest<NorthStarSaveResponse>('PUT', '/api/v1/onboarding/north-star', {
-    analysis_id: analysisId,
-    selected_categories: selectedCategories,
-  });
+  return apiRequest<NorthStarSaveResponse>(
+    'PUT',
+    '/api/v1/onboarding/north-star',
+    {
+      analysis_id: analysisId,
+      selected_categories: selectedCategories,
+    },
+  );
 }
 
 // ─── Star Icon ─────────────────────────────────────────────────────────────
@@ -383,16 +514,22 @@ function CategoryScreen({
               <Text
                 style={[
                   styles.selectCountValue,
-                  selected.length === 5 && styles.selectCountReady,
+                  selected.length === NORTH_STAR_SELECTED_COUNT &&
+                    styles.selectCountReady,
                 ]}
               >
-                {selected.length} / 5
+                {selected.length} / {NORTH_STAR_SELECTED_COUNT}
               </Text>
             </View>
 
             <TouchableOpacity
-              style={styles.primaryBtn}
+              style={[
+                styles.primaryBtn,
+                selected.length !== NORTH_STAR_SELECTED_COUNT &&
+                  styles.primaryBtnDisabled,
+              ]}
               onPress={onConfirm}
+              disabled={selected.length !== NORTH_STAR_SELECTED_COUNT}
               activeOpacity={0.7}
             >
               <Text style={styles.primaryBtnText}>내 북극성 확정</Text>
@@ -427,6 +564,8 @@ function ConfirmScreen({
 }) {
   const row1 = selected.slice(0, 3);
   const row2 = selected.slice(3);
+  const canConfirm =
+    selected.length === NORTH_STAR_SELECTED_COUNT && !loading;
 
   return (
     <View style={styles.flex}>
@@ -468,9 +607,9 @@ function ConfirmScreen({
       <View style={styles.confirmFooter}>
         {error ? <Text style={styles.errorBox}>{error}</Text> : null}
         <TouchableOpacity
-          style={[styles.primaryBtn, loading && styles.primaryBtnDisabled]}
+          style={[styles.primaryBtn, !canConfirm && styles.primaryBtnDisabled]}
           onPress={onFinish}
-          disabled={loading}
+          disabled={!canConfirm}
           activeOpacity={0.7}
         >
           {loading ? (
@@ -526,28 +665,26 @@ export default function OnboardingView() {
     setAnalyzeError('');
     setAnalyzing(true);
     try {
+      // POST /api/v1/onboarding/north-star/analyze  { text }
       const data = await analyzeNorthStar(text);
       setAnalysisId(data.analysis_id);
       setCandidates(data.candidates);
       setSelected([]);
       setCategoryError('');
       setStep(3);
-    } catch {
-      console.warn('Backend server not reached. Falling back to mock data.');
-      setAnalysisId(MOCK_ANALYSIS_ID);
-      setCandidates(MOCK_CANDIDATES);
-      setSelected([]);
-      setCategoryError('');
-      setAnalyzeError('');
-      setStep(3);
+    } catch (error) {
+      console.error('API Error Detail:', error);
+      showAlert('연동 에러', formatApiErrorAlert(error));
     } finally {
       setAnalyzing(false);
     }
   }, [analyzing, sentence]);
 
   const handleCategoryConfirm = useCallback(() => {
-    if (selected.length !== 5) {
-      setCategoryError('성단은 5개를 선택해야 합니다.');
+    if (selected.length !== NORTH_STAR_SELECTED_COUNT) {
+      setCategoryError(
+        `성단은 정확히 ${NORTH_STAR_SELECTED_COUNT}개를 선택해야 합니다.`,
+      );
       return;
     }
     setCategoryError('');
@@ -556,21 +693,30 @@ export default function OnboardingView() {
   }, [selected.length]);
 
   const handleFinish = useCallback(async () => {
-    if (!analysisId || selected.length !== 5 || saving) return;
+    if (
+      !analysisId ||
+      selected.length !== NORTH_STAR_SELECTED_COUNT ||
+      saving
+    ) {
+      return;
+    }
 
     setSaveError('');
     setSaving(true);
     try {
-      await saveNorthStar(analysisId, selected);
-    } catch {
-      console.warn('Backend server not reached. Falling back to mock data.');
-      setSaveError('');
+      // PUT /api/v1/onboarding/north-star  { analysis_id, selected_categories }
+      const data = await saveNorthStar(analysisId, selected);
+      if (data.onboarding_completed === true) {
+        router.replace('/');
+        return;
+      }
+      setSaveError('온보딩이 완료되지 않았습니다. 다시 시도해 주세요.');
+    } catch (error) {
+      console.error('API Error Detail:', error);
+      showAlert('연동 에러', formatApiErrorAlert(error));
     } finally {
       setSaving(false);
     }
-
-    // Always leave onboarding for the main home screen (never reset step).
-    router.replace('/');
   }, [analysisId, router, saving, selected]);
 
   const handleNavBack = useCallback(() => {
