@@ -9,6 +9,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -360,6 +361,11 @@ function PolarisModal({ visible, onClose }: { visible: boolean; onClose: () => v
 // ─── Main Screen ────────────────────────────────────────────────────────────
 
 export default function Index() {
+  return <HomeScreen />;
+}
+
+function HomeScreen() {
+  const router = useRouter();
   const { width: screenW } = useWindowDimensions();
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [modalOpen, setModalOpen] = useState(false);
@@ -389,6 +395,15 @@ export default function Index() {
         <BackgroundStars />
 
         <SafeAreaView style={styles.safe} edges={['top']}>
+          {/* Dev: open onboarding flow */}
+          <TouchableOpacity
+            style={styles.onboardingTestBtn}
+            onPress={() => router.push('/onboarding')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.onboardingTestBtnText}>온보딩 테스트</Text>
+          </TouchableOpacity>
+
           {/* ── Header ──────────────────────────────────────────────── */}
           <View style={styles.header}>
             <Text style={styles.title}>
@@ -535,6 +550,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 12,
     paddingBottom: 8,
+  },
+  onboardingTestBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 16,
+    zIndex: 30,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(200,218,255,0.35)',
+    borderRadius: 8,
+    backgroundColor: 'rgba(8,20,48,0.75)',
+  },
+  onboardingTestBtnText: {
+    fontSize: 11,
+    color: 'rgba(200,218,255,0.85)',
+    letterSpacing: -0.1,
   },
   title: {
     fontSize: 26,
