@@ -360,6 +360,10 @@ function PolarisModal({ visible, onClose }: { visible: boolean; onClose: () => v
 // ─── Main Screen ────────────────────────────────────────────────────────────
 
 export default function Index() {
+  return <HomeScreen />;
+}
+
+function HomeScreen() {
   const { width: screenW } = useWindowDimensions();
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [modalOpen, setModalOpen] = useState(false);
