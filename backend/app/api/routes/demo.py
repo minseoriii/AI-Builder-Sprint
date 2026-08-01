@@ -10,6 +10,7 @@ from app.core.constants import (
     DAILY_RECORD_DIMENSIONS,
     DAILY_RECORD_TEXT_MAX_LENGTH,
     DIMENSION_LABELS,
+    NORTH_STAR_SELECTED_COUNT,
     QUESTION_PRESETS,
     TAG_MAX_LENGTH,
     TAG_MIN_LENGTH,
@@ -36,6 +37,7 @@ class DemoConfigResponse(BaseModel):
     tags_per_dimension_max: int
     tags_total_max: int
     daily_record_text_max_length: int
+    north_star_selected_count: int
 
 
 def _demo_disabled() -> None:
@@ -69,6 +71,7 @@ def demo_config() -> DemoConfigResponse:
         tags_per_dimension_max=TAGS_PER_DIMENSION_MAX,
         tags_total_max=TAGS_TOTAL_MAX,
         daily_record_text_max_length=DAILY_RECORD_TEXT_MAX_LENGTH,
+        north_star_selected_count=NORTH_STAR_SELECTED_COUNT,
     )
 
 

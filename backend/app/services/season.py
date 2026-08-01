@@ -1,16 +1,26 @@
 import calendar
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from app.core.config import settings
-from app.schemas.galaxy import Season
+from app.models.north_star import NorthStar
+from app.schemas.galaxy import Season, season_label
 
 
 def today_in_user_timezone() -> date:
-    from datetime import datetime
-    from zoneinfo import ZoneInfo
-
     tz = ZoneInfo(settings.default_timezone)
     return datetime.now(tz).date()
+
+
+def date_in_user_timezone(value: datetime) -> date:
+    tz = ZoneInfo(settings.default_timezone)
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=ZoneInfo("UTC"))
+    return value.astimezone(tz).date()
+
+
+def season_period_for_date(value: date) -> tuple[int, Season]:
+    return season_year_for_date(value), season_for_date(value)
 
 
 def season_for_date(value: date) -> Season:
@@ -58,6 +68,44 @@ def is_future_season(year: int, season: Season, today: date | None = None) -> bo
     today = today or today_in_user_timezone()
     season_start, _ = get_season_date_range(year, season)
     return season_start > today
+
+
+def next_season_start(year: int, season: Season) -> date:
+    if season == Season.SPRING:
+        return date(year, 6, 1)
+    if season == Season.SUMMER:
+        return date(year, 9, 1)
+    if season == Season.AUTUMN:
+        return date(year, 12, 1)
+    return date(year + 1, 3, 1)
+
+
+def is_north_star_editable(
+    north_star: NorthStar,
+    today: date | None = None,
+) -> bool:
+    today = today or today_in_user_timezone()
+    locked_date = date_in_user_timezone(north_star.updated_at)
+    locked_year, locked_season = season_period_for_date(locked_date)
+    current_year, current_season = season_period_for_date(today)
+    return (current_year, current_season) != (locked_year, locked_season)
+
+
+def get_north_star_editability(
+    north_star: NorthStar,
+    today: date | None = None,
+) -> dict:
+    today = today or today_in_user_timezone()
+    locked_date = date_in_user_timezone(north_star.updated_at)
+    locked_year, locked_season = season_period_for_date(locked_date)
+    editable = is_north_star_editable(north_star, today)
+    return {
+        "editable": editable,
+        "locked_season_year": locked_year,
+        "locked_season": locked_season.value,
+        "locked_season_label": season_label(locked_season),
+        "editable_from": None if editable else next_season_start(locked_year, locked_season),
+    }
 
 
 def months_in_season(year: int, season: Season) -> list[str]:

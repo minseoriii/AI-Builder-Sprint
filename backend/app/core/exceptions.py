@@ -86,6 +86,24 @@ class NorthStarNotFoundError(AppError):
         )
 
 
+class NorthStarSeasonLockedError(AppError):
+    def __init__(
+        self,
+        *,
+        editable_from: str,
+        locked_season_year: int,
+        locked_season_label: str,
+    ) -> None:
+        super().__init__(
+            code="NORTH_STAR_SEASON_LOCKED",
+            message=(
+                f"북극성은 {locked_season_year}년 {locked_season_label}이 끝난 후 "
+                f"수정할 수 있습니다. ({editable_from}부터 가능)"
+            ),
+            status_code=422,
+        )
+
+
 class StarNotFoundError(AppError):
     def __init__(self) -> None:
         super().__init__(

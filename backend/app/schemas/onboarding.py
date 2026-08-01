@@ -1,7 +1,10 @@
+from datetime import date
+
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.constants import (
     CONSTELLATION_CATEGORIES,
+    NORTH_STAR_SELECTED_COUNT,
     NORTH_STAR_TEXT_MAX_LENGTH,
     NORTH_STAR_TEXT_MIN_LENGTH,
 )
@@ -73,11 +76,18 @@ class NorthStarAnalyzeResponse(BaseModel):
 
 class NorthStarSaveRequest(BaseModel):
     analysis_id: str
-    selected_categories: list[str] = Field(min_length=1, max_length=7)
+    selected_categories: list[str] = Field(
+        min_length=NORTH_STAR_SELECTED_COUNT,
+        max_length=NORTH_STAR_SELECTED_COUNT,
+    )
 
     @field_validator("selected_categories")
     @classmethod
     def validate_unique(cls, values: list[str]) -> list[str]:
+        if len(values) != NORTH_STAR_SELECTED_COUNT:
+            raise ValueError(
+                f"상위 성단은 정확히 {NORTH_STAR_SELECTED_COUNT}개를 선택해야 합니다."
+            )
         if len(values) != len(set(values)):
             raise ValueError("중복된 성단 선택은 허용되지 않습니다.")
         for category in values:
@@ -91,6 +101,15 @@ class NorthStarSummary(BaseModel):
     selected_categories: list[str]
 
 
+class NorthStarEditability(BaseModel):
+    editable: bool
+    locked_season_year: int | None = None
+    locked_season: str | None = None
+    locked_season_label: str | None = None
+    editable_from: date | None = None
+
+
 class OnboardingStatusResponse(BaseModel):
     onboarding_completed: bool
     north_star: NorthStarSummary | None = None
+    north_star_editability: NorthStarEditability | None = None

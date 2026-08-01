@@ -53,6 +53,7 @@ def test_demo_config_no_secrets(client, demo_ui_enabled):
         "tags_per_dimension_max",
         "tags_total_max",
         "daily_record_text_max_length",
+        "north_star_selected_count",
     }
     assert set(data.keys()) == allowed_keys
 

@@ -9,6 +9,7 @@ from app.core.exceptions import (
     AnalysisExpiredError,
     AnalysisNotFoundError,
     InvalidSelectionError,
+    NorthStarSeasonLockedError,
 )
 from app.models.north_star import NorthStar
 from app.models.north_star_analysis import NorthStarAnalysis
@@ -16,6 +17,7 @@ from app.models.selected_constellation import SelectedConstellation
 from app.schemas.onboarding import (
     ConstellationCandidateResponse,
     NorthStarAnalyzeResponse,
+    NorthStarEditability,
     NorthStarSummary,
     OnboardingStatusResponse,
 )
@@ -24,29 +26,67 @@ from app.services.north_star_analysis import (
     analyze_north_star_constellations,
     get_north_star_analysis_prompt_version,
 )
+from app.services.season import get_north_star_editability, is_north_star_editable
 from app.services.upstage import UpstageClient
+
+
+def _build_editability_for_open_onboarding() -> NorthStarEditability:
+    return NorthStarEditability(editable=True)
+
+
+def _get_active_north_star(db: Session, user_id: uuid.UUID) -> NorthStar | None:
+    return (
+        db.query(NorthStar)
+        .filter(NorthStar.user_id == user_id, NorthStar.is_active.is_(True))
+        .one_or_none()
+    )
+
+
+def _ensure_north_star_editable_for_update(db: Session, user_id: uuid.UUID) -> None:
+    profile = get_or_create_user_profile(db, user_id)
+    if not profile.onboarding_completed:
+        return
+
+    north_star = _get_active_north_star(db, user_id)
+    if north_star is None or is_north_star_editable(north_star):
+        return
+
+    editability = get_north_star_editability(north_star)
+    raise NorthStarSeasonLockedError(
+        editable_from=editability["editable_from"].isoformat(),
+        locked_season_year=editability["locked_season_year"],
+        locked_season_label=editability["locked_season_label"],
+    )
 
 
 def get_onboarding_status(db: Session, user_id: uuid.UUID) -> OnboardingStatusResponse:
     profile = get_or_create_user_profile(db, user_id)
     if not profile.onboarding_completed:
-        return OnboardingStatusResponse(onboarding_completed=False, north_star=None)
+        return OnboardingStatusResponse(
+            onboarding_completed=False,
+            north_star=None,
+            north_star_editability=_build_editability_for_open_onboarding(),
+        )
 
-    north_star = (
-        db.query(NorthStar)
-        .filter(NorthStar.user_id == user_id, NorthStar.is_active.is_(True))
-        .one_or_none()
-    )
+    north_star = _get_active_north_star(db, user_id)
     if north_star is None:
-        return OnboardingStatusResponse(onboarding_completed=False, north_star=None)
+        return OnboardingStatusResponse(
+            onboarding_completed=False,
+            north_star=None,
+            north_star_editability=_build_editability_for_open_onboarding(),
+        )
 
     categories = [item.category for item in north_star.selected_constellations]
+    editability = NorthStarEditability.model_validate(
+        get_north_star_editability(north_star)
+    )
     return OnboardingStatusResponse(
         onboarding_completed=True,
         north_star=NorthStarSummary(
             text=north_star.original_text,
             selected_categories=categories,
         ),
+        north_star_editability=editability,
     )
 
 
@@ -57,6 +97,7 @@ def create_north_star_analysis(
     client: UpstageClient,
 ) -> NorthStarAnalyzeResponse:
     get_or_create_user_profile(db, user_id)
+    _ensure_north_star_editable_for_update(db, user_id)
     ai_result = analyze_north_star_constellations(text, client)
 
     now = datetime.now(UTC)
@@ -109,6 +150,7 @@ def save_north_star_selection(
     selected_categories: list[str],
 ) -> OnboardingStatusResponse:
     analysis = _get_valid_analysis(db, user_id, analysis_id)
+    _ensure_north_star_editable_for_update(db, user_id)
     candidate_map = {item["category"]: item for item in analysis.candidates}
 
     for category in selected_categories:
@@ -160,10 +202,4 @@ def save_north_star_selection(
         raise
 
     db.refresh(north_star)
-    return OnboardingStatusResponse(
-        onboarding_completed=True,
-        north_star=NorthStarSummary(
-            text=north_star.original_text,
-            selected_categories=selected_categories,
-        ),
-    )
+    return get_onboarding_status(db, user_id)

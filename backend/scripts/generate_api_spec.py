@@ -65,16 +65,26 @@ endpoints: list[dict] = [
             "north_star:object|null",
             "north_star.text:string - 북극성 원문",
             "north_star.selected_categories:string[] - 선택한 상위 성단",
+            "north_star_editability:object|null",
+            "north_star_editability.editable:boolean",
+            "north_star_editability.locked_season_year:int|null",
+            "north_star_editability.locked_season:string|null",
+            "north_star_editability.locked_season_label:string|null",
+            "north_star_editability.editable_from:date|null - 수정 가능 시작일",
         ],
         "errors": [
             "401 AUTH_TOKEN_MISSING / AUTH_TOKEN_INVALID",
             "503 AUTH_SERVICE_UNAVAILABLE",
         ],
-        "notes": ["앱 최초 진입·온보딩 분기 판단에 사용"],
+        "notes": [
+            "앱 최초 진입·온보딩 분기 판단에 사용",
+            "온보딩 완료 후 같은 계절에는 north_star_editability.editable=false",
+        ],
         "exampleRequest": "GET /api/v1/me/onboarding\nAuthorization: Bearer {accessToken}",
         "exampleResponse": {
             "onboarding_completed": False,
             "north_star": None,
+            "north_star_editability": {"editable": True},
         },
     },
     {
@@ -95,10 +105,14 @@ endpoints: list[dict] = [
             "candidates[].reason:string",
         ],
         "errors": [
-            "422 VALIDATION_ERROR",
+            "422 VALIDATION_ERROR / NORTH_STAR_SEASON_LOCKED",
             "502 AI_SERVICE_ERROR / AI_RESPONSE_INVALID",
         ],
-        "notes": ["분석 결과 TTL 24시간", "AI 호출 endpoint — 로딩 UI 필요"],
+        "notes": [
+            "분석 결과 TTL 24시간",
+            "AI 호출 endpoint — 로딩 UI 필요",
+            "온보딩 완료 후 현재 계절에는 422 NORTH_STAR_SEASON_LOCKED",
+        ],
         "exampleRequest": {
             "text": "가족과 건강을 지키면서 꾸준히 배우고 싶다.",
         },
@@ -124,23 +138,26 @@ endpoints: list[dict] = [
         "status": ["200", "401", "404", "422"],
         "requestFields": [
             "analysis_id:UUID required",
-            "selected_categories:string[] required (1~7개, 분석 후보에 포함된 성단만)",
+            "selected_categories:string[] required (정확히 5개, 분석 후보에 포함된 성단만)",
         ],
         "responseFields": ["OnboardingStatusResponse (GET /me/onboarding 과 동일)"],
         "errors": [
             "404 ANALYSIS_NOT_FOUND",
-            "422 ANALYSIS_EXPIRED / ANALYSIS_ALREADY_USED / INVALID_SELECTION",
+            "422 ANALYSIS_EXPIRED / ANALYSIS_ALREADY_USED / INVALID_SELECTION / NORTH_STAR_SEASON_LOCKED",
         ],
-        "notes": ["온보딩 완료 후 홈으로 이동"],
+        "notes": [
+            "온보딩 완료 후 홈으로 이동",
+            "이미 온보딩된 사용자는 다음 계절부터만 재저장 가능",
+        ],
         "exampleRequest": {
             "analysis_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-            "selected_categories": ["가족", "건강", "성장·배움"],
+            "selected_categories": ["가족", "건강", "성장·배움", "관계·사랑", "균형·조화"],
         },
         "exampleResponse": {
             "onboarding_completed": True,
             "north_star": {
                 "text": "가족과 건강을 지키면서 꾸준히 배우고 싶다.",
-                "selected_categories": ["가족", "건강", "성장·배움"],
+                "selected_categories": ["가족", "건강", "성장·배움", "관계·사랑", "균형·조화"],
             },
         },
     },
@@ -942,7 +959,7 @@ def build_html() -> str:
       <thead><tr><th>화면/기능</th><th>포함 API</th><th>연동 메모</th></tr></thead>
       <tbody>
         <tr><td>앱 진입</td><td>Supabase Auth (FE), GET /api/v1/me/onboarding</td><td>세션 없으면 signInAnonymously → token으로 onboarding 상태 확인</td></tr>
-        <tr><td>온보딩 · 북극성</td><td>POST analyze → PUT north-star</td><td>7개 후보 중 1~7개 성단 선택, 원문 그대로 저장</td></tr>
+        <tr><td>온보딩 · 북극성</td><td>POST analyze → PUT north-star</td><td>7개 후보 중 정확히 5개 성단 선택, 원문 그대로 저장</td></tr>
         <tr><td>홈 · 성단</td><td>GET /api/v1/home, GET /api/v1/constellations/{{category}}/stars</td><td>성단 클릭 → 별 날짜(년/월/일)·기록 내용·태그</td></tr>
         <tr><td>하루 기록</td><td>daily-records analyze → details → confirm</td><td>5차원 태그 확인/수정 후 주 성단 확정 → 별 생성</td></tr>
         <tr><td>혜성 추천</td><td>comet-recommendations generate/accept/reject</td><td>홈 또는 별도 UI에서 추천 노출</td></tr>

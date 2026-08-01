@@ -21,6 +21,7 @@
     currentRecommendation: null,
     selectedNorthStarCategories: [],
     northStarAnalysisId: null,
+    onboardingData: null,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -322,22 +323,46 @@
 
     const onboarding = await apiCall("GET", apiV1("/me/onboarding"));
     const onboardingData = onboarding && onboarding.ok ? onboarding.data : null;
+    state.onboardingData = onboardingData;
+    updateNorthStarCard(onboardingData);
 
-    if (onboardingData && !onboardingData.onboarding_completed) {
-      $("onboarding-card").classList.remove("hidden");
-    } else {
-      $("onboarding-card").classList.add("hidden");
-    }
-
-    renderHome(res.data);
+    renderHome(res.data, onboardingData);
   }
 
-  function renderHome(data) {
+  function updateNorthStarCard(onboardingData) {
+    const card = $("onboarding-card");
+    const title = card.querySelector("h3");
+    if (!onboardingData) {
+      card.classList.add("hidden");
+      return;
+    }
+    if (!onboardingData.onboarding_completed) {
+      title.textContent = "온보딩 (북극성 미설정)";
+      card.classList.remove("hidden");
+      return;
+    }
+    if (onboardingData.north_star_editability && onboardingData.north_star_editability.editable) {
+      title.textContent = "북극성 수정 (새 계절)";
+      card.classList.remove("hidden");
+      return;
+    }
+    card.classList.add("hidden");
+  }
+
+  function renderHome(data, onboardingData) {
     const el = $("home-content");
     if (!data.north_star_text) {
       el.innerHTML = '<p class="empty">북극성이 아직 없습니다. 위 온보딩 카드에서 설정하세요.</p>';
     } else {
       let html = `<p><strong>북극성 원문</strong><br>${escapeHtml(data.north_star_text)}</p>`;
+      if (
+        onboardingData &&
+        onboardingData.north_star_editability &&
+        !onboardingData.north_star_editability.editable
+      ) {
+        const lock = onboardingData.north_star_editability;
+        html += `<p class="hint warn">북극성은 ${escapeHtml(lock.editable_from)}부터 수정할 수 있습니다. (${lock.locked_season_year}년 ${escapeHtml(lock.locked_season_label)} 설정 잠금)</p>`;
+      }
       html += `<p>총 별: ${data.total_star_count} · 오늘 기록: ${data.today_recorded ? "있음" : "없음"}</p>`;
 
       if (data.comet_recommendation) {
@@ -387,30 +412,52 @@
     );
     if (!res || !res.ok) return;
     state.northStarAnalysisId = res.data.analysis_id;
-    state.selectedNorthStarCategories = res.data.candidates
-      .filter((c) => c.recommended)
-      .map((c) => c.category);
+    const selectCount = state.config?.north_star_selected_count ?? 5;
 
     const box = $("onboarding-candidates");
     box.classList.remove("hidden");
-    box.innerHTML = "<p>성단 후보 (추천 항목이 기본 선택됨):</p>";
-    res.data.candidates.forEach((c) => {
+    box.innerHTML = `<p>성단 후보 7개 중 <strong>정확히 ${selectCount}개</strong>를 선택하세요 (적합도 상위 ${selectCount}개가 기본 선택됨):</p><p id="north-star-select-hint" class="hint"></p>`;
+    res.data.candidates.forEach((c, index) => {
       const div = document.createElement("div");
       div.className = "candidate-item";
       const id = "ns-cat-" + c.category.replace(/\W/g, "");
-      const checked = c.recommended ? "checked" : "";
+      const checked = index < selectCount ? "checked" : "";
       div.innerHTML = `<label><input type="checkbox" id="${id}" value="${escapeHtml(c.category)}" ${checked}> ${escapeHtml(c.category)} (${c.score.toFixed(2)}) — ${escapeHtml(c.reason)}</label>`;
       box.appendChild(div);
     });
+    box.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+      cb.addEventListener("change", () => {
+        const checked = box.querySelectorAll('input[type="checkbox"]:checked');
+        if (checked.length > selectCount) {
+          cb.checked = false;
+        }
+        updateNorthStarSelectHint(box, selectCount);
+      });
+    });
+    updateNorthStarSelectHint(box, selectCount);
     $("btn-north-star-save").classList.remove("hidden");
   }
 
+  function updateNorthStarSelectHint(box, selectCount) {
+    const hint = $("north-star-select-hint");
+    if (!hint) return;
+    const count = box.querySelectorAll('input[type="checkbox"]:checked').length;
+    if (count === selectCount) {
+      hint.textContent = `${selectCount}개 선택됨 — 저장할 수 있습니다.`;
+      hint.className = "hint ok";
+    } else {
+      hint.textContent = `${count}/${selectCount}개 선택됨 — ${selectCount}개를 선택해야 저장할 수 있습니다.`;
+      hint.className = "hint warn";
+    }
+  }
+
   async function saveNorthStar() {
+    const selectCount = state.config?.north_star_selected_count ?? 5;
     const selected = [];
     $("onboarding-candidates").querySelectorAll('input[type="checkbox"]:checked').forEach((cb) => {
       selected.push(cb.value);
     });
-    if (!selected.length || !state.northStarAnalysisId) return;
+    if (selected.length !== selectCount || !state.northStarAnalysisId) return;
     const res = await apiCall(
       "PUT",
       apiV1("/onboarding/north-star"),

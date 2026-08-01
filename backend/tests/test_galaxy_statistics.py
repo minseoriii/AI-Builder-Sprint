@@ -46,6 +46,13 @@ def test_season_winter_year_boundary():
     assert end == date(2027, 2, 28)
 
 
+def test_next_season_start():
+    from app.services.season import next_season_start
+
+    assert next_season_start(2026, Season.SPRING) == date(2026, 6, 1)
+    assert next_season_start(2026, Season.WINTER) == date(2027, 3, 1)
+
+
 def test_overview_no_stars(db_session):
     _setup(db_session, ["가족", "건강"])
     year, season = 2026, Season.SUMMER
