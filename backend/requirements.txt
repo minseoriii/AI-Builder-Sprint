@@ -1,0 +1,7 @@
+fastapi[standard]
+pydantic-settings
+sqlalchemy
+psycopg[binary]
+alembic
+openai
+httpx

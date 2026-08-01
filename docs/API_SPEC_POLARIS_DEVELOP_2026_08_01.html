@@ -1,0 +1,1360 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Polaris 백엔드 API 연동 명세서 - develop 2026-08-01</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root { --bg: #f5f6f8; --paper: #ffffff; --ink: #202733; --muted: #607084; --line: #d7dee8; --soft: #eef3f8; --code: #f3f6fa; --blue: #225ea8; --green: #0f766e; --amber: #9a5b00; --red: #b42318; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: Arial, "Malgun Gothic", sans-serif; line-height: 1.65; }
+    main { max-width: 960px; margin: 0 auto; padding: 28px 20px 72px; }
+    header, section, .toolbar { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 20px 22px; margin-bottom: 16px; }
+    h1, h2, h3, h4 { line-height: 1.35; letter-spacing: 0; }
+    h1 { margin: 0 0 10px; font-size: 28px; } h2 { margin: 0 0 14px; font-size: 21px; } h3 { margin: 20px 0 8px; font-size: 17px; } h4 { margin: 14px 0 6px; font-size: 15px; }
+    p { margin: 8px 0; } a { color: var(--blue); text-decoration: none; } a:hover { text-decoration: underline; }
+    ul, ol { margin: 8px 0 0 22px; padding: 0; } li { margin: 5px 0; }
+    table { width: 100%; border-collapse: collapse; margin: 10px 0 16px; font-size: 14px; }
+    th, td { border: 1px solid var(--line); padding: 9px 10px; vertical-align: top; text-align: left; } th { background: var(--soft); font-weight: 700; }
+    code { font-family: Consolas, "Courier New", monospace; background: #eef2f7; border-radius: 4px; padding: 1px 4px; overflow-wrap: anywhere; }
+    pre { margin: 8px 0 14px; padding: 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--code); color: #172033; font-family: Consolas, "Courier New", monospace; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; overflow-x: hidden; }
+    .meta, .small { color: var(--muted); font-size: 13px; } .summary, .notice, .danger, .info { padding: 12px 14px; border-radius: 0 6px 6px 0; margin: 12px 0; }
+    .summary { border-left: 4px solid var(--green); background: #effaf7; } .notice { border-left: 4px solid var(--amber); background: #fff8eb; } .danger { border-left: 4px solid var(--red); background: #fff4f2; } .info { border-left: 4px solid var(--blue); background: #eef6ff; }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; } .metric { border: 1px solid var(--line); border-radius: 8px; background: #fbfcfe; padding: 12px; min-height: 86px; } .metric strong { display: block; font-size: 24px; line-height: 1.2; } .metric span { color: var(--muted); font-size: 13px; }
+    .toc a { display: inline-block; margin: 2px 12px 2px 0; font-size: 14px; }
+    .pill { display: inline-block; border: 1px solid #cfd8e3; border-radius: 999px; padding: 2px 8px; margin: 2px 4px 2px 0; background: #f8fafc; font-size: 12px; color: #314154; white-space: nowrap; }
+    .method { display: inline-block; min-width: 58px; padding: 3px 8px; border-radius: 4px; color: #fff; text-align: center; font-weight: 700; font-size: 12px; } .GET { background: #2368a2; } .POST { background: #087f5b; } .PATCH { background: #8a5a00; } .DELETE { background: #b42318; } .PUT { background: #6b46c1; }
+    details.endpoint { border: 1px solid var(--line); border-radius: 8px; background: #fff; margin: 12px 0; overflow: hidden; } details.endpoint[open] { box-shadow: 0 8px 22px rgba(21, 32, 48, 0.06); }
+    details.endpoint summary { list-style: none; cursor: pointer; padding: 12px 14px; background: #fbfcfe; border-bottom: 1px solid transparent; } details.endpoint[open] summary { border-bottom-color: var(--line); } details.endpoint summary::-webkit-details-marker { display: none; }
+    .endpoint-head { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; } .path { font-family: Consolas, "Courier New", monospace; font-weight: 700; overflow-wrap: anywhere; } .desc { color: var(--muted); font-size: 13px; width: 100%; margin-left: 68px; } .endpoint-body { padding: 14px; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; } .toolbar { position: sticky; top: 0; z-index: 3; padding: 14px; } .toolbar-row { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 10px; align-items: center; }
+    input, select { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 10px 11px; font: inherit; background: #fff; color: var(--ink); } .hidden { display: none !important; }
+    .link-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+    .link-card { border: 1px solid var(--line); border-radius: 8px; padding: 14px; background: #fbfcfe; }
+    .link-card strong { display: block; margin-bottom: 6px; }
+    @media (max-width: 760px) { main { padding: 18px 12px 48px; } header, section, .toolbar { padding: 16px 14px; } h1 { font-size: 23px; } .grid, .link-grid { grid-template-columns: 1fr 1fr; } .two-col, .toolbar-row { grid-template-columns: 1fr; } .desc { margin-left: 0; } table { font-size: 13px; } th, td { padding: 7px; } }
+    @media print { body { background: #fff; } main { max-width: none; padding: 0; } header, section, .toolbar, details.endpoint { break-inside: avoid; box-shadow: none; } .toolbar { position: static; } details.endpoint:not([open]) .endpoint-body { display: block; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Polaris 백엔드 API 연동 명세서</h1>
+    <p class="meta">전달 대상: 프론트엔드/QA · 작성 주체: 백엔드 · 기준일: 2026-08-01</p>
+    <p class="meta">프로젝트: AI Builder Sprint 2026 「가치 정렬 AI 저널」 · 기준 브랜치: develop</p>
+    <div class="summary"><strong>화면별 호출 순서</strong>와 <strong>API 상세</strong>를 기준으로 연동하면 됩니다. 인증은 Supabase <code>Authorization: Bearer &#123;accessToken&#125;</code>이며, 회원가입/로그인 API는 백엔드에 없고 프론트 Supabase Auth가 처리합니다.</div>
+    <div class="grid">
+      <div class="metric"><strong>28</strong><span>총 API endpoint</span></div>
+      <div class="metric"><strong>26</strong><span>인증 필요 API</span></div>
+      <div class="metric"><strong>2</strong><span>공개 API</span></div>
+      <div class="metric"><strong>8</strong><span>API 그룹</span></div>
+    </div>
+  </header>
+
+  <section class="toc" id="toc">
+    <h2>목차</h2>
+    <a href="#decision">1. 전달 요약</a>
+    <a href="#tools">2. Swagger · Postman</a>
+    <a href="#scope">3. 전달 범위</a>
+    <a href="#common">4. 공통 규칙</a>
+    <a href="#flows">5. 화면별 호출 흐름</a>
+    <a href="#errors">6. 에러 처리</a>
+    <a href="#enums">7. Enum · 고정 목록</a>
+    <a href="#api">8. API 상세</a>
+  </section>
+
+  <section id="decision">
+    <h2>1. 전달 요약</h2>
+    <table>
+      <thead><tr><th>항목</th><th>현재 기준</th><th>연동 메모</th></tr></thead>
+      <tbody>
+        <tr><td>기준 브랜치</td><td><code>develop</code></td><td>Polaris MVP — onboarding / home / stars / daily-records / comets / galaxy</td></tr>
+        <tr><td>인증</td><td><code>Authorization: Bearer &#123;SUPABASE_ACCESS_TOKEN&#125;</code></td><td>앱 최초 실행 시 Supabase 익명 로그인(<code>signInAnonymously</code>) 후 access token 사용</td></tr>
+        <tr><td>Base URL (로컬)</td><td><code>http://127.0.0.1:8000</code></td><td>Android Emulator: <code>http://10.0.2.2:8000</code></td></tr>
+        <tr><td>AI 분석</td><td>Upstage Solar Pro 3</td><td>북극성·하루기록·혜성추천·은하요약 — 로딩/재시도 UI 필요. AI 실패 시 502</td></tr>
+        <tr><td>분석 TTL</td><td>24시간</td><td>북극성·하루기록·혜성추천 분석 결과 만료 시 재분석 필요</td></tr>
+        <tr><td>오류 형식</td><td><code>{"detail": {"code", "message"}}</code></td><td><code>code</code> 기준으로 화면 분기</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="tools">
+    <h2>2. Swagger · Postman</h2>
+    <div class="info">로컬 백엔드 실행 후 아래 주소로 스키마를 확인하거나 Postman에 import할 수 있습니다. (<code>fastapi dev app/main.py</code> 또는 <code>uvicorn app.main:app --reload</code>)</div>
+    <div class="link-grid">
+      <div class="link-card">
+        <strong>Swagger UI</strong>
+        <p><a href="http://127.0.0.1:8000/docs" target="_blank" rel="noopener">http://127.0.0.1:8000/docs</a></p>
+        <p class="small">브라우저에서 API try-it-out 테스트</p>
+      </div>
+      <div class="link-card">
+        <strong>ReDoc</strong>
+        <p><a href="http://127.0.0.1:8000/redoc" target="_blank" rel="noopener">http://127.0.0.1:8000/redoc</a></p>
+        <p class="small">읽기 전용 API 문서</p>
+      </div>
+      <div class="link-card">
+        <strong>OpenAPI JSON</strong>
+        <p><a href="http://127.0.0.1:8000/openapi.json" target="_blank" rel="noopener">http://127.0.0.1:8000/openapi.json</a></p>
+        <p class="small">Postman · codegen import용</p>
+      </div>
+      <div class="link-card">
+        <strong>Postman Collection</strong>
+        <p><code>docs/postman/POLARIS_API.postman_collection.json</code></p>
+        <p class="small">저장소에 포함된 컬렉션 파일 import</p>
+      </div>
+    </div>
+    <h3>Postman 설정 방법</h3>
+    <ol>
+      <li>Postman → <strong>Import</strong> → <code>docs/postman/POLARIS_API.postman_collection.json</code> 선택</li>
+      <li>또는 Import → Link → <code>http://127.0.0.1:8000/openapi.json</code> (서버 실행 중)</li>
+      <li>Collection Variables에서 <code>baseUrl</code>을 환경에 맞게 수정 (예: <code>http://10.0.2.2:8000</code>)</li>
+      <li>Supabase 세션의 <code>access_token</code>을 <code>accessToken</code> 변수에 설정</li>
+      <li>Collection Auth는 Bearer Token → <code>{{accessToken}}</code> 사용</li>
+    </ol>
+    <h3>Swagger에서 인증 테스트</h3>
+    <ol>
+      <li>프론트/Supabase에서 access token 발급</li>
+      <li>Swagger UI 우측 상단 <strong>Authorize</strong> 클릭</li>
+      <li><code>Bearer &#123;token&#125;</code> 형식으로 입력 (Bearer 접두사 포함)</li>
+    </ol>
+    <div class="notice">FastAPI 기본 OpenAPI에는 Bearer scheme이 자동 등록되지 않을 수 있습니다. Swagger try-it-out 시 헤더를 직접 추가하거나 Postman 컬렉션 사용을 권장합니다.</div>
+  </section>
+
+  <section id="scope">
+    <h2>3. 전달 범위</h2>
+    <table>
+      <thead><tr><th>화면/기능</th><th>포함 API</th><th>연동 메모</th></tr></thead>
+      <tbody>
+        <tr><td>앱 진입</td><td>Supabase Auth (FE), GET /api/v1/me/onboarding</td><td>세션 없으면 signInAnonymously → token으로 onboarding 상태 확인</td></tr>
+        <tr><td>온보딩 · 북극성</td><td>POST analyze → PUT north-star</td><td>7개 후보 중 1~7개 성단 선택, 원문 그대로 저장</td></tr>
+        <tr><td>홈 · 성단</td><td>GET /api/v1/home, GET /api/v1/constellations/{category}/stars</td><td>성단 클릭 → 별 날짜(년/월/일)·기록 내용·태그</td></tr>
+        <tr><td>하루 기록</td><td>daily-records analyze → details → confirm</td><td>5차원 태그 확인/수정 후 주 성단 확정 → 별 생성</td></tr>
+        <tr><td>혜성 추천</td><td>comet-recommendations generate/accept/reject</td><td>홈 또는 별도 UI에서 추천 노출</td></tr>
+        <tr><td>혜성 관측소 · 관측 중</td><td>GET /comets?status=PENDING, PUT/DELETE, POST complete</td><td>이름·할 일·성운·추천이유(AI)·등록일·목표완료일·완료/수정/삭제</td></tr>
+        <tr><td>혜성 관측소 · 관측완료</td><td>GET /comets?status=COMPLETED, POST create-star</td><td>관측 기록지 + 내 은하에 별 생성</td></tr>
+        <tr><td>은하</td><td>galaxy overview, reports</td><td>계절별 통계 + AI 3줄 요약/계절 리포트</td></tr>
+        <tr><td>헬스/준비</td><td>GET /health, GET /api/v1/ready</td><td>배포 확인·FE 연결 테스트</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="common">
+    <h2>4. 공통 규칙</h2>
+    <table>
+      <thead><tr><th>항목</th><th>규칙</th></tr></thead>
+      <tbody>
+        <tr><td>API prefix</td><td>사용자 API <code>/api/v1/**</code>, 헬스 <code>/health</code></td></tr>
+        <tr><td>인증 헤더</td><td><code>Authorization: Bearer &#123;SUPABASE_ACCESS_TOKEN&#125;</code></td></tr>
+        <tr><td>Content-Type</td><td><code>application/json</code></td></tr>
+        <tr><td>시간</td><td>datetime은 ISO 8601 UTC (<code>2026-07-31T12:00:00Z</code>), date는 <code>YYYY-MM-DD</code></td></tr>
+        <tr><td>사용자 ID</td><td>요청 body/query에 user id 넣지 않음 — JWT sub만 사용</td></tr>
+        <tr><td>Swagger</td><td><code>/docs</code>, <code>/redoc</code>, <code>/openapi.json</code></td></tr>
+        <tr><td>CORS</td><td>기본 localhost Expo 포트 허용 (<code>.env</code> CORS_ORIGINS)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="flows">
+    <h2>5. 화면별 호출 흐름</h2>
+    <h3>앱 최초 진입 · 온보딩</h3>
+    <ol>
+      <li>Supabase 세션 확인 → 없으면 <code>signInAnonymously()</code></li>
+      <li><code>GET /api/v1/me/onboarding</code> — 완료 여부 확인</li>
+      <li>미완료: 북극성 입력 → <code>POST /api/v1/onboarding/north-star/analyze</code></li>
+      <li>후보 선택 → <code>PUT /api/v1/onboarding/north-star</code></li>
+      <li><code>GET /api/v1/home</code> 홈 진입</li>
+    </ol>
+    <h3>하루 기록 (별 생성)</h3>
+    <ol>
+      <li><code>POST /api/v1/daily-records/analyze</code> — AI 추출</li>
+      <li>missing_questions 있으면 FE 고정 질문 UI 표시 후 태그 보완</li>
+      <li><code>PUT /api/v1/daily-records/analyses/&#123;id&#125;/details</code> — 태그 확정·재분류</li>
+      <li>주 성단 확인/수정 → <code>POST .../confirm</code></li>
+      <li>홈 새로고침: <code>GET /api/v1/home</code></li>
+    </ol>
+    <h3>혜성 · 은하</h3>
+    <ol>
+      <li>추천: <code>POST /api/v1/comet-recommendations/generate</code> → accept/reject</li>
+      <li>관측소: <code>GET/POST /api/v1/comets</code>, complete/cancel</li>
+      <li>은하 개요: <code>GET /api/v1/galaxy/overview</code></li>
+      <li>계절 리포트: generate → 상세 → reflection 저장</li>
+    </ol>
+  </section>
+
+  <section id="errors">
+    <h2>6. 에러 처리</h2>
+    <table>
+      <thead><tr><th>HTTP</th><th>대표 code</th><th>화면 처리</th></tr></thead>
+      <tbody>
+        <tr><td>401</td><td>AUTH_TOKEN_MISSING, AUTH_TOKEN_INVALID</td><td>Supabase 세션 재발급 또는 익명 로그인 재시도</td></tr>
+        <tr><td>404</td><td>ANALYSIS_NOT_FOUND, DAILY_RECORD_NOT_FOUND, COMET_NOT_FOUND, GALAXY_REPORT_NOT_FOUND</td><td>리소스 없음 안내, 목록으로 이동</td></tr>
+        <tr><td>422</td><td>VALIDATION_ERROR, ANALYSIS_EXPIRED, INVALID_SELECTION, INSUFFICIENT_RECORDS 등</td><td>입력값/만료/상태 오류 — 재분석 또는 수정 유도</td></tr>
+        <tr><td>502</td><td>AI_SERVICE_ERROR, AI_RESPONSE_INVALID</td><td>AI 일시 오류 — 재시도 버튼</td></tr>
+        <tr><td>503</td><td>AUTH_SERVICE_UNAVAILABLE</td><td>Supabase 장애 — 잠시 후 재시도</td></tr>
+        <tr><td>500</td><td>DATABASE_ERROR</td><td>일반 오류 안내</td></tr>
+      </tbody>
+    </table>
+    <pre>{"detail": {"code": "ANALYSIS_EXPIRED", "message": "분석 결과가 만료되었습니다. 다시 분석해 주세요."}}</pre>
+  </section>
+
+  <section id="enums">
+    <h2>7. Enum · 고정 목록</h2>
+    <table>
+      <thead><tr><th>이름</th><th>값</th><th>사용처</th></tr></thead>
+      <tbody>
+        <tr><td><code>ConstellationCategory</code></td><td><code>가족</code>, <code>관계·사랑</code>, <code>건강</code>, <code>성장·배움</code>, <code>커리어·성취</code>, <code>재정적 안정</code>, <code>자율·독립</code>, <code>창의성·표현</code>, <code>기여·봉사</code>, <code>영성·신념</code>, <code>즐거움·여가</code>, <code>모험·도전</code>, <code>소속감·공동체</code>, <code>진정성·자기다움</code>, <code>리더십·영향력</code>, <code>균형·조화</code></td><td>북극성 선택, 하루기록 주 성단, 혜성 target_category</td></tr>
+        <tr><td><code>DailyRecordDimension</code></td><td><code>PERSON, PLACE, ACTIVITY, TIME, EMOTION</code></td><td>하루기록 태그 5차원</td></tr>
+        <tr><td><code>DailyRecordAnalysisStatus</code></td><td><code>NEEDS_INPUT, READY_FOR_REVIEW, READY_FOR_CONFIRMATION, CONFIRMED, EXPIRED</code></td><td>하루기록 분석 상태</td></tr>
+        <tr><td><code>StarSourceType</code></td><td><code>DAILY_RECORD, COMET</code></td><td>홈 constellation stars</td></tr>
+        <tr><td><code>CometStatus</code></td><td><code>PENDING, COMPLETED, CANCELLED</code></td><td>혜성 상태</td></tr>
+        <tr><td><code>CometSourceType</code></td><td><code>AI_RECOMMENDATION, USER_CREATED</code></td><td>혜성 출처</td></tr>
+        <tr><td><code>CometRecordStatus</code></td><td><code>RECORDED, STAR_CREATED</code></td><td>관측완료 탭 기록 상태</td></tr>
+        <tr><td><code>Season</code></td><td><code>SPRING, SUMMER, AUTUMN, WINTER</code></td><td>은하 overview/report (봄/여름/가을/겨울)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="api">
+    <h2>8. API 상세</h2>
+    <div class="toolbar">
+      <div class="toolbar-row">
+        <input id="search" type="search" placeholder="경로, 그룹, 설명, 필드명으로 검색">
+        <select id="groupFilter"><option value="">전체 그룹</option></select>
+      </div>
+      <p class="small"><span id="count"></span> · 각 항목을 펼치면 요청/응답 필드, 예시, 에러를 볼 수 있습니다.</p>
+    </div>
+    <div id="endpoints"></div>
+  </section>
+</main>
+<script>
+const endpoints = [
+  {
+    "group": "Health",
+    "method": "GET",
+    "path": "/health",
+    "auth": "인증 없음",
+    "summary": "서버 생존 확인용 헬스체크입니다.",
+    "status": [
+      "200"
+    ],
+    "requestFields": [
+      "요청 본문 없음"
+    ],
+    "responseFields": [
+      "status:string - ok",
+      "service:string - 앱 이름(기본 'Polaris API')"
+    ],
+    "errors": [],
+    "notes": [
+      "배포·로드밸런서·FE 연결 확인용 공개 endpoint"
+    ],
+    "exampleRequest": "GET /health",
+    "exampleResponse": {
+      "status": "ok",
+      "service": "Polaris API"
+    }
+  },
+  {
+    "group": "Health",
+    "method": "GET",
+    "path": "/api/v1/ready",
+    "auth": "인증 없음",
+    "summary": "DB·Upstage·Supabase Auth 환경변수 설정 여부를 확인합니다.",
+    "status": [
+      "200"
+    ],
+    "requestFields": [
+      "요청 본문 없음"
+    ],
+    "responseFields": [
+      "database_configured:boolean",
+      "upstage_configured:boolean",
+      "supabase_auth_configured:boolean"
+    ],
+    "errors": [],
+    "notes": [
+      "앱 기동 직후 FE/QA가 백엔드 준비 상태를 확인할 때 사용"
+    ],
+    "exampleRequest": "GET /api/v1/ready",
+    "exampleResponse": {
+      "database_configured": true,
+      "upstage_configured": true,
+      "supabase_auth_configured": true
+    }
+  },
+  {
+    "group": "Onboarding",
+    "method": "GET",
+    "path": "/api/v1/me/onboarding",
+    "auth": "Bearer 필요 (Supabase access token)",
+    "summary": "온보딩 완료 여부와 북극성 요약을 조회합니다.",
+    "status": [
+      "200",
+      "401",
+      "503"
+    ],
+    "requestFields": [
+      "요청 본문 없음"
+    ],
+    "responseFields": [
+      "onboarding_completed:boolean",
+      "north_star:object|null",
+      "north_star.text:string - 북극성 원문",
+      "north_star.selected_categories:string[] - 선택한 상위 성단"
+    ],
+    "errors": [
+      "401 AUTH_TOKEN_MISSING / AUTH_TOKEN_INVALID",
+      "503 AUTH_SERVICE_UNAVAILABLE"
+    ],
+    "notes": [
+      "앱 최초 진입·온보딩 분기 판단에 사용"
+    ],
+    "exampleRequest": "GET /api/v1/me/onboarding\nAuthorization: Bearer {accessToken}",
+    "exampleResponse": {
+      "onboarding_completed": false,
+      "north_star": null
+    }
+  },
+  {
+    "group": "Onboarding",
+    "method": "POST",
+    "path": "/api/v1/onboarding/north-star/analyze",
+    "auth": "Bearer 필요",
+    "summary": "북극성 원문을 AI로 분석해 7개 상위 성단 후보를 반환합니다.",
+    "status": [
+      "200",
+      "401",
+      "422",
+      "502"
+    ],
+    "requestFields": [
+      "text:string required (1~500자, trim 후)"
+    ],
+    "responseFields": [
+      "analysis_id:UUID",
+      "candidates[] - 정확히 7개",
+      "candidates[].category:string - 16개 상위 성단",
+      "candidates[].score:number (0~1)",
+      "candidates[].recommended:boolean",
+      "candidates[].evidence:string[]",
+      "candidates[].reason:string"
+    ],
+    "errors": [
+      "422 VALIDATION_ERROR",
+      "502 AI_SERVICE_ERROR / AI_RESPONSE_INVALID"
+    ],
+    "notes": [
+      "분석 결과 TTL 24시간",
+      "AI 호출 endpoint — 로딩 UI 필요"
+    ],
+    "exampleRequest": {
+      "text": "가족과 건강을 지키면서 꾸준히 배우고 싶다."
+    },
+    "exampleResponse": {
+      "analysis_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "candidates": [
+        {
+          "category": "가족",
+          "score": 0.94,
+          "recommended": true,
+          "evidence": [
+            "가족과"
+          ],
+          "reason": "가족 관계를 중요하게 표현함"
+        }
+      ]
+    }
+  },
+  {
+    "group": "Onboarding",
+    "method": "PUT",
+    "path": "/api/v1/onboarding/north-star",
+    "auth": "Bearer 필요",
+    "summary": "분석 결과에서 성단을 선택해 북극성을 저장하고 온보딩을 완료합니다.",
+    "status": [
+      "200",
+      "401",
+      "404",
+      "422"
+    ],
+    "requestFields": [
+      "analysis_id:UUID required",
+      "selected_categories:string[] required (1~7개, 분석 후보에 포함된 성단만)"
+    ],
+    "responseFields": [
+      "OnboardingStatusResponse (GET /me/onboarding 과 동일)"
+    ],
+    "errors": [
+      "404 ANALYSIS_NOT_FOUND",
+      "422 ANALYSIS_EXPIRED / ANALYSIS_ALREADY_USED / INVALID_SELECTION"
+    ],
+    "notes": [
+      "온보딩 완료 후 홈으로 이동"
+    ],
+    "exampleRequest": {
+      "analysis_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "selected_categories": [
+        "가족",
+        "건강",
+        "성장·배움"
+      ]
+    },
+    "exampleResponse": {
+      "onboarding_completed": true,
+      "north_star": {
+        "text": "가족과 건강을 지키면서 꾸준히 배우고 싶다.",
+        "selected_categories": [
+          "가족",
+          "건강",
+          "성장·배움"
+        ]
+      }
+    }
+  },
+  {
+    "group": "Home",
+    "method": "GET",
+    "path": "/api/v1/home",
+    "auth": "Bearer 필요",
+    "summary": "홈 화면 데이터 — 북극성 원문, 성단별 별, 오늘 기록 여부, 혜성 추천을 반환합니다.",
+    "status": [
+      "200",
+      "401",
+      "503"
+    ],
+    "requestFields": [
+      "요청 본문 없음"
+    ],
+    "responseFields": [
+      "north_star_text:string|null",
+      "today_recorded:boolean",
+      "total_star_count:number",
+      "constellations[]",
+      "constellations[].category:string",
+      "constellations[].selected_from_north_star:boolean",
+      "constellations[].star_count:number",
+      "constellations[].stars[] - id, source_type, recorded_on, preview",
+      "comet_recommendation:object|null - id, target_category, title, estimated_minutes"
+    ],
+    "errors": [
+      "401",
+      "503 AUTH_SERVICE_UNAVAILABLE"
+    ],
+    "notes": [
+      "북극성 영역에는 north_star_text(사용자 원문) 표시",
+      "source_type: DAILY_RECORD | COMET"
+    ],
+    "exampleRequest": "GET /api/v1/home\nAuthorization: Bearer {accessToken}",
+    "exampleResponse": {
+      "north_star_text": "가족과 건강을 지키면서 꾸준히 배우고 싶다.",
+      "today_recorded": false,
+      "total_star_count": 12,
+      "constellations": [],
+      "comet_recommendation": null
+    }
+  },
+  {
+    "group": "Daily Records",
+    "method": "POST",
+    "path": "/api/v1/daily-records/analyze",
+    "auth": "Bearer 필요",
+    "summary": "하루 기록 원문을 AI로 분석해 5차원 태그와 누락 질문을 반환합니다.",
+    "status": [
+      "200",
+      "401",
+      "422",
+      "502"
+    ],
+    "requestFields": [
+      "text:string required (1~2000자)",
+      "recorded_on:date required (YYYY-MM-DD)"
+    ],
+    "responseFields": [
+      "analysis_id:UUID",
+      "status: NEEDS_INPUT | READY_FOR_REVIEW | READY_FOR_CONFIRMATION | CONFIRMED | EXPIRED",
+      "original_text:string",
+      "tags: {PERSON, PLACE, ACTIVITY, TIME, EMOTION} → string[]",
+      "missing_questions[]: {dimension, question}"
+    ],
+    "errors": [
+      "422 VALIDATION_ERROR",
+      "502 AI_SERVICE_ERROR / AI_RESPONSE_INVALID"
+    ],
+    "notes": [
+      "missing_questions의 question은 고정 프리셋 문구",
+      "분석 TTL 24시간"
+    ],
+    "exampleRequest": {
+      "text": "민서랑 아웃백에서 치킨 먹고 오랜만에 편하게 얘기함.",
+      "recorded_on": "2026-07-31"
+    },
+    "exampleResponse": {
+      "analysis_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      "status": "NEEDS_INPUT",
+      "original_text": "민서랑 아웃백에서 치킨 먹고 오랜만에 편하게 얘기함.",
+      "tags": {
+        "PERSON": [],
+        "PLACE": [],
+        "ACTIVITY": [],
+        "TIME": [],
+        "EMOTION": []
+      },
+      "missing_questions": [
+        {
+          "dimension": "PERSON",
+          "question": "오늘 누구와 함께했나요? ..."
+        }
+      ]
+    }
+  },
+  {
+    "group": "Daily Records",
+    "method": "PUT",
+    "path": "/api/v1/daily-records/analyses/{analysis_id}/details",
+    "auth": "Bearer 필요",
+    "summary": "사용자가 태그를 수정·보완한 뒤 AI 성단 분류를 재실행합니다.",
+    "status": [
+      "200",
+      "401",
+      "404",
+      "422",
+      "502"
+    ],
+    "pathParams": [
+      "analysis_id:UUID"
+    ],
+    "requestFields": [
+      "tags:object required - 5차원 모두 필수",
+      "차원당 1~5개, 전체 최대 20개, 태그 1~50자"
+    ],
+    "responseFields": [
+      "analysis_id:UUID",
+      "status:string",
+      "original_text:string",
+      "recorded_on:date",
+      "tags:object",
+      "primary_category:string|null",
+      "category_ranking[]: {category, score, reason}"
+    ],
+    "errors": [
+      "404 ANALYSIS_NOT_FOUND",
+      "422 ANALYSIS_EXPIRED / ANALYSIS_ALREADY_USED / INVALID_TAGS",
+      "502 AI 오류"
+    ],
+    "notes": [
+      "primary_category는 사용자가 confirm에서 최종 확정"
+    ],
+    "exampleRequest": {
+      "tags": {
+        "PERSON": [
+          "민서",
+          "친구"
+        ],
+        "PLACE": [
+          "아웃백",
+          "음식점"
+        ],
+        "ACTIVITY": [
+          "함께 식사",
+          "대화"
+        ],
+        "TIME": [
+          "오랜만에"
+        ],
+        "EMOTION": [
+          "편안함"
+        ]
+      }
+    },
+    "exampleResponse": {
+      "analysis_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      "status": "READY_FOR_CONFIRMATION",
+      "primary_category": "관계·사랑",
+      "category_ranking": [
+        {
+          "category": "관계·사랑",
+          "score": 0.91,
+          "reason": "..."
+        }
+      ]
+    }
+  },
+  {
+    "group": "Daily Records",
+    "method": "POST",
+    "path": "/api/v1/daily-records/analyses/{analysis_id}/confirm",
+    "auth": "Bearer 필요",
+    "summary": "최종 주 성단을 확정하고 하루 기록·별을 생성합니다.",
+    "status": [
+      "200",
+      "401",
+      "404",
+      "422"
+    ],
+    "pathParams": [
+      "analysis_id:UUID"
+    ],
+    "requestFields": [
+      "primary_category:string required - 16개 상위 성단 중 하나"
+    ],
+    "responseFields": [
+      "daily_record_id:UUID",
+      "star_id:UUID",
+      "primary_category:string",
+      "recorded_on:date"
+    ],
+    "errors": [
+      "404 ANALYSIS_NOT_FOUND",
+      "422 ANALYSIS_NOT_READY / ANALYSIS_EXPIRED / ANALYSIS_ALREADY_USED / INVALID_CATEGORY"
+    ],
+    "notes": [
+      "멱등: 이미 확정된 analysis_id는 동일 결과 반환"
+    ],
+    "exampleRequest": {
+      "primary_category": "관계·사랑"
+    },
+    "exampleResponse": {
+      "daily_record_id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+      "star_id": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+      "primary_category": "관계·사랑",
+      "recorded_on": "2026-07-31"
+    }
+  },
+  {
+    "group": "Daily Records",
+    "method": "GET",
+    "path": "/api/v1/daily-records/{daily_record_id}",
+    "auth": "Bearer 필요",
+    "summary": "저장된 하루 기록 상세를 조회합니다.",
+    "status": [
+      "200",
+      "401",
+      "404"
+    ],
+    "pathParams": [
+      "daily_record_id:UUID"
+    ],
+    "requestFields": [
+      "요청 본문 없음"
+    ],
+    "responseFields": [
+      "id:UUID",
+      "original_text:string",
+      "recorded_on:date",
+      "tags:object",
+      "primary_category:string",
+      "category_ranking[]",
+      "category_overridden:boolean",
+      "created_at:datetime (ISO 8601 UTC)"
+    ],
+    "errors": [
+      "404 DAILY_RECORD_NOT_FOUND"
+    ],
+    "notes": [
+      "본인 기록만 조회 가능"
+    ],
+    "exampleRequest": "GET /api/v1/daily-records/{daily_record_id}",
+    "exampleResponse": {
+      "id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+      "original_text": "민서랑 아웃백에서 ...",
+      "recorded_on": "2026-07-31",
+      "primary_category": "관계·사랑",
+      "category_overridden": false,
+      "created_at": "2026-07-31T12:00:00Z"
+    }
+  },
+  {
+    "group": "Comet Recommendations",
+    "method": "GET",
+    "path": "/api/v1/comet-recommendations/current",
+    "auth": "Bearer 필요",
+    "summary": "현재 대기 중(PENDING)인 혜성 추천을 조회합니다.",
+    "status": [
+      "200",
+      "401"
+    ],
+    "requestFields": [
+      "요청 본문 없음"
+    ],
+    "responseFields": [
+      "recommendation:object|null",
+      "recommendation.id:UUID",
+      "recommendation.target_category:string",
+      "recommendation.title:string",
+      "recommendation.description:string",
+      "recommendation.reason:string",
+      "recommendation.estimated_minutes:number",
+      "recommendation.expires_at:datetime"
+    ],
+    "errors": [],
+    "notes": [
+      "없으면 recommendation=null"
+    ],
+    "exampleRequest": "GET /api/v1/comet-recommendations/current",
+    "exampleResponse": {
+      "recommendation": null
+    }
+  },
+  {
+    "group": "Comet Recommendations",
+    "method": "POST",
+    "path": "/api/v1/comet-recommendations/generate",
+    "auth": "Bearer 필요",
+    "summary": "부족한 성단 기반 AI 혜성 추천을 생성합니다.",
+    "status": [
+      "200",
+      "401",
+      "404",
+      "422",
+      "502"
+    ],
+    "requestFields": [
+      "요청 본문 없음"
+    ],
+    "responseFields": [
+      "recommendation: CometRecommendationItem",
+      "reused:boolean - 기존 PENDING 추천 재사용 여부"
+    ],
+    "errors": [
+      "404 NORTH_STAR_NOT_FOUND",
+      "422 ACTIVE_CONSTELLATIONS_NOT_FOUND / COMET_RECOMMENDATION_UNAVAILABLE",
+      "502 AI 오류"
+    ],
+    "notes": [
+      "이미 PENDING 추천이 있으면 reused=true로 기존 반환"
+    ],
+    "exampleRequest": "POST /api/v1/comet-recommendations/generate",
+    "exampleResponse": {
+      "recommendation": {
+        "id": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+        "target_category": "건강",
+        "title": "저녁에 20분 산책하기",
+        "description": "가까운 곳을 20분 정도 걸어보세요.",
+        "reason": "최근 건강 성단 별이 상대적으로 적습니다.",
+        "estimated_minutes": 20,
+        "expires_at": "2026-08-01T12:00:00Z"
+      },
+      "reused": false
+    }
+  },
+  {
+    "group": "Comet Recommendations",
+    "method": "POST",
+    "path": "/api/v1/comet-recommendations/{recommendation_id}/accept",
+    "auth": "Bearer 필요",
+    "summary": "혜성 추천을 수락해 혜성 관측소 할 일로 등록합니다.",
+    "status": [
+      "200",
+      "401",
+      "404",
+      "422"
+    ],
+    "pathParams": [
+      "recommendation_id:UUID"
+    ],
+    "requestFields": [
+      "요청 본문 없음"
+    ],
+    "responseFields": [
+      "CometItem: id, source_type(AI_RECOMMENDATION), target_category, title, description, status, created_at, completed_at"
+    ],
+    "errors": [
+      "404 COMET_RECOMMENDATION_NOT_FOUND",
+      "422 COMET_RECOMMENDATION_EXPIRED / COMET_RECOMMENDATION_ALREADY_RESPONDED"
+    ],
+    "notes": [],
+    "exampleRequest": "POST /api/v1/comet-recommendations/{recommendation_id}/accept",
+    "exampleResponse": {
+      "id": "ffffffff-ffff-ffff-ffff-ffffffffffff",
+      "source_type": "AI_RECOMMENDATION",
+      "target_category": "건강",
+      "title": "저녁에 20분 산책하기",
+      "status": "PENDING",
+      "created_at": "2026-07-31T12:00:00Z",
+      "completed_at": null
+    }
+  },
+  {
+    "group": "Comet Recommendations",
+    "method": "POST",
+    "path": "/api/v1/comet-recommendations/{recommendation_id}/reject",
+    "auth": "Bearer 필요",
+    "summary": "혜성 추천을 거절합니다.",
+    "status": [
+      "200",
+      "401",
+      "404",
+      "422"
+    ],
+    "pathParams": [
+      "recommendation_id:UUID"
+    ],
+    "requestFields": [
+      "요청 본문 없음"
+    ],
+    "responseFields": [
+      "CometRecommendationItem"
+    ],
+    "errors": [
+      "404 COMET_RECOMMENDATION_NOT_FOUND",
+      "422 COMET_RECOMMENDATION_EXPIRED / COMET_RECOMMENDATION_ALREADY_RESPONDED"
+    ],
+    "notes": [
+      "멱등: 이미 거절된 경우 동일 항목 반환"
+    ],
+    "exampleRequest": "POST /api/v1/comet-recommendations/{recommendation_id}/reject",
+    "exampleResponse": {
+      "id": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+      "target_category": "건강",
+      "title": "저녁에 20분 산책하기"
+    }
+  },
+  {
+    "group": "Comets",
+    "method": "GET",
+    "path": "/api/v1/comets",
+    "auth": "Bearer 필요",
+    "summary": "혜성 관측소 목록을 조회합니다. status=PENDING은 관측 중, status=COMPLETED는 관측완료(관측 기록지) 탭입니다.",
+    "status": [
+      "200",
+      "401",
+      "422"
+    ],
+    "query": [
+      "status optional: PENDING(관측 중) | COMPLETED(관측완료) | CANCELLED",
+      "source_type optional: AI_RECOMMENDATION | USER_CREATED"
+    ],
+    "requestFields": [
+      "요청 본문 없음"
+    ],
+    "responseFields": [
+      "items: CometItem[]",
+      "CometItem.id, title, description, target_category, reason(AI만), created_at",
+      "CometItem.target_completion_date, status, activity_summary, completed_on",
+      "CometItem.record_status: RECORDED|STAR_CREATED (COMPLETED만)",
+      "CometItem.star_id (별 생성 후)"
+    ],
+    "errors": [
+      "422 잘못된 enum"
+    ],
+    "notes": [
+      "관측 중 탭: GET ?status=PENDING",
+      "관측완료 탭: GET ?status=COMPLETED"
+    ],
+    "exampleRequest": "GET /api/v1/comets?status=PENDING",
+    "exampleResponse": {
+      "items": []
+    }
+  },
+  {
+    "group": "Comets",
+    "method": "POST",
+    "path": "/api/v1/comets",
+    "auth": "Bearer 필요",
+    "summary": "사용자가 직접 혜성 할 일을 추가합니다.",
+    "status": [
+      "200",
+      "401",
+      "422"
+    ],
+    "requestFields": [
+      "title:string required (1~100자) - 혜성 이름",
+      "target_category:string required - 연결된 성운 카테고리",
+      "description:string|null optional - 추천 활동/할 일",
+      "target_completion_date:date|null optional - 목표 완료일"
+    ],
+    "responseFields": [
+      "CometItem"
+    ],
+    "errors": [
+      "422 VALIDATION_ERROR"
+    ],
+    "notes": [
+      "source_type=USER_CREATED, reason=null"
+    ],
+    "exampleRequest": {
+      "title": "가족에게 안부 문자 보내기",
+      "target_category": "가족",
+      "description": "오늘 저녁에 전화한다.",
+      "target_completion_date": "2026-08-05"
+    },
+    "exampleResponse": {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "source_type": "USER_CREATED",
+      "target_category": "가족",
+      "title": "가족에게 안부 문자 보내기",
+      "reason": null,
+      "status": "PENDING",
+      "target_completion_date": "2026-08-05"
+    }
+  },
+  {
+    "group": "Comets",
+    "method": "PUT",
+    "path": "/api/v1/comets/{comet_id}",
+    "auth": "Bearer 필요",
+    "summary": "관측 중/관측완료 혜성 정보를 수정합니다.",
+    "status": [
+      "200",
+      "401",
+      "404",
+      "422"
+    ],
+    "pathParams": [
+      "comet_id:UUID"
+    ],
+    "requestFields": [
+      "title, target_category, description, target_completion_date (PENDING만)",
+      "activity_summary (COMPLETED만)"
+    ],
+    "responseFields": [
+      "CometItem"
+    ],
+    "errors": [
+      "404 COMET_NOT_FOUND",
+      "422 COMET_INVALID_STATE"
+    ],
+    "notes": [
+      "관측 중: 이름·활동·카테고리·목표완료일 수정",
+      "관측완료: 이름·카테고리·활동요약 수정"
+    ],
+    "exampleRequest": {
+      "title": "수정된 혜성 이름",
+      "description": "수정된 할 일"
+    },
+    "exampleResponse": {
+      "id": "...",
+      "title": "수정된 혜성 이름",
+      "status": "PENDING"
+    }
+  },
+  {
+    "group": "Comets",
+    "method": "DELETE",
+    "path": "/api/v1/comets/{comet_id}",
+    "auth": "Bearer 필요",
+    "summary": "혜성 또는 관측 기록지를 삭제합니다. 연결된 별이 있으면 함께 삭제됩니다.",
+    "status": [
+      "204",
+      "401",
+      "404"
+    ],
+    "pathParams": [
+      "comet_id:UUID"
+    ],
+    "requestFields": [
+      "요청 본문 없음"
+    ],
+    "responseFields": [
+      "응답 본문 없음"
+    ],
+    "errors": [
+      "404 COMET_NOT_FOUND"
+    ],
+    "notes": [
+      "관측 중/관측완료 탭의 삭제 버튼"
+    ],
+    "exampleRequest": "DELETE /api/v1/comets/{comet_id}",
+    "exampleResponse": "204 No Content"
+  },
+  {
+    "group": "Comets",
+    "method": "POST",
+    "path": "/api/v1/comets/{comet_id}/cancel",
+    "auth": "Bearer 필요",
+    "summary": "대기 중인 혜성을 취소합니다.",
+    "status": [
+      "200",
+      "401",
+      "404",
+      "422"
+    ],
+    "pathParams": [
+      "comet_id:UUID"
+    ],
+    "requestFields": [
+      "요청 본문 없음"
+    ],
+    "responseFields": [
+      "CometItem (status=CANCELLED)"
+    ],
+    "errors": [
+      "404 COMET_NOT_FOUND",
+      "422 COMET_INVALID_STATE"
+    ],
+    "notes": [
+      "완료된 혜성은 취소 불가"
+    ],
+    "exampleRequest": "POST /api/v1/comets/{comet_id}/cancel",
+    "exampleResponse": {
+      "id": "...",
+      "status": "CANCELLED"
+    }
+  },
+  {
+    "group": "Comets",
+    "method": "POST",
+    "path": "/api/v1/comets/{comet_id}/complete",
+    "auth": "Bearer 필요",
+    "summary": "관측 완료 처리 — 혜성 관측 기록지를 생성합니다(별은 아직 생성하지 않음).",
+    "status": [
+      "200",
+      "401",
+      "404",
+      "422"
+    ],
+    "pathParams": [
+      "comet_id:UUID"
+    ],
+    "requestFields": [
+      "activity_summary:string required - 수행한 활동 요약",
+      "completed_on:date optional (기본: 오늘, Asia/Seoul)"
+    ],
+    "responseFields": [
+      "comet_id:UUID",
+      "completed_on:date",
+      "activity_summary:string",
+      "record_status: RECORDED"
+    ],
+    "errors": [
+      "404 COMET_NOT_FOUND",
+      "422 COMET_INVALID_STATE"
+    ],
+    "notes": [
+      "관측 완료 버튼 → status=COMPLETED, record_status=RECORDED",
+      "멱등 처리"
+    ],
+    "exampleRequest": {
+      "completed_on": "2026-07-31",
+      "activity_summary": "저녁에 동네 공원을 20분 걸었다."
+    },
+    "exampleResponse": {
+      "comet_id": "11111111-1111-1111-1111-111111111111",
+      "completed_on": "2026-07-31",
+      "activity_summary": "저녁에 동네 공원을 20분 걸었다.",
+      "record_status": "RECORDED"
+    }
+  },
+  {
+    "group": "Comets",
+    "method": "POST",
+    "path": "/api/v1/comets/{comet_id}/create-star",
+    "auth": "Bearer 필요",
+    "summary": "관측완료 탭에서 '내 은하에 별 생성' — 완료된 혜성 기록을 별로 변환합니다.",
+    "status": [
+      "200",
+      "401",
+      "404",
+      "422"
+    ],
+    "pathParams": [
+      "comet_id:UUID"
+    ],
+    "requestFields": [
+      "요청 본문 없음"
+    ],
+    "responseFields": [
+      "comet_id:UUID",
+      "star_id:UUID",
+      "category:string",
+      "recorded_on:date",
+      "record_status: STAR_CREATED"
+    ],
+    "errors": [
+      "404 COMET_NOT_FOUND",
+      "422 COMET_INVALID_STATE"
+    ],
+    "notes": [
+      "COMPLETED + RECORDED 상태만 가능",
+      "멱등: 이미 별이 있으면 기존 star_id 반환"
+    ],
+    "exampleRequest": "POST /api/v1/comets/{comet_id}/create-star",
+    "exampleResponse": {
+      "comet_id": "11111111-1111-1111-1111-111111111111",
+      "star_id": "22222222-2222-2222-2222-222222222222",
+      "category": "건강",
+      "recorded_on": "2026-07-31",
+      "record_status": "STAR_CREATED"
+    }
+  },
+  {
+    "group": "Stars",
+    "method": "GET",
+    "path": "/api/v1/stars/{star_id}",
+    "auth": "Bearer 필요",
+    "summary": "홈 성단 내 별 상세 — 생성 날짜, 기록 내용, 태그를 반환합니다.",
+    "status": [
+      "200",
+      "401",
+      "404"
+    ],
+    "pathParams": [
+      "star_id:UUID"
+    ],
+    "requestFields": [
+      "요청 본문 없음"
+    ],
+    "responseFields": [
+      "id:UUID",
+      "source_type: DAILY_RECORD | COMET",
+      "category:string",
+      "recorded_on:date",
+      "recorded_year, recorded_month, recorded_day:number",
+      "content:string - 하루기록 원문 또는 혜성 활동 요약",
+      "tags:object|null - DAILY_RECORD만 5차원 태그"
+    ],
+    "errors": [
+      "404 STAR_NOT_FOUND"
+    ],
+    "notes": [
+      "홈에서 별 클릭 시 상세 조회"
+    ],
+    "exampleRequest": "GET /api/v1/stars/{star_id}",
+    "exampleResponse": {
+      "id": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+      "source_type": "DAILY_RECORD",
+      "category": "관계·사랑",
+      "recorded_on": "2026-07-31",
+      "recorded_year": 2026,
+      "recorded_month": 7,
+      "recorded_day": 31,
+      "content": "민서랑 아웃백에서 치킨 먹고 편하게 얘기함.",
+      "tags": {
+        "PERSON": [
+          "민서"
+        ],
+        "EMOTION": [
+          "편안함"
+        ]
+      }
+    }
+  },
+  {
+    "group": "Stars",
+    "method": "GET",
+    "path": "/api/v1/constellations/{category}/stars",
+    "auth": "Bearer 필요",
+    "summary": "홈에서 성단 클릭 시 해당 성단의 별 목록(날짜·내용·태그 포함)을 반환합니다.",
+    "status": [
+      "200",
+      "401",
+      "422"
+    ],
+    "pathParams": [
+      "category:string - 16개 상위 성단 URL-encoded"
+    ],
+    "requestFields": [
+      "요청 본문 없음"
+    ],
+    "responseFields": [
+      "category:string",
+      "stars: StarDetailResponse[]"
+    ],
+    "errors": [
+      "422 INVALID_CATEGORY"
+    ],
+    "notes": [
+      "성단 상세 화면 초기 로드용",
+      "개별 별 클릭 시 GET /stars/{id} 재사용 가능"
+    ],
+    "exampleRequest": "GET /api/v1/constellations/%EA%B4%80%EA%B3%84%C2%B7%EC%82%AC%EB%9E%91/stars",
+    "exampleResponse": {
+      "category": "관계·사랑",
+      "stars": [
+        {
+          "id": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+          "recorded_year": 2026,
+          "recorded_month": 7,
+          "recorded_day": 31,
+          "content": "민서랑 ...",
+          "tags": {
+            "PERSON": [
+              "민서"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "group": "Galaxy",
+    "method": "GET",
+    "path": "/api/v1/galaxy/overview",
+    "auth": "Bearer 필요",
+    "summary": "은하 개요 — 계절별 별 통계와 AI 3줄 요약을 반환합니다.",
+    "status": [
+      "200",
+      "401",
+      "422",
+      "502"
+    ],
+    "query": [
+      "year optional: int (미입력 시 현재 연도)",
+      "season optional: SPRING | SUMMER | AUTUMN | WINTER"
+    ],
+    "requestFields": [
+      "요청 본문 없음"
+    ],
+    "responseFields": [
+      "year, season, season_label, north_star_text, total_star_count",
+      "observed_constellation_count, active_constellation_count, observation_days",
+      "unselected_category_star_count, constellations[], largest_category",
+      "smallest_selected_category, unobserved_selected_categories[]",
+      "summary.lines[] - AI 3줄 요약"
+    ],
+    "errors": [
+      "422 INVALID_SEASON",
+      "502 AI 오류"
+    ],
+    "notes": [
+      "비율·집계는 백엔드 계산값, AI는 해석만"
+    ],
+    "exampleRequest": "GET /api/v1/galaxy/overview?year=2026&season=SUMMER",
+    "exampleResponse": {
+      "year": 2026,
+      "season": "SUMMER",
+      "season_label": "여름",
+      "total_star_count": 12,
+      "summary": {
+        "lines": [
+          "...",
+          "...",
+          "..."
+        ]
+      }
+    }
+  },
+  {
+    "group": "Galaxy",
+    "method": "POST",
+    "path": "/api/v1/galaxy/reports/{year}/{season}/generate",
+    "auth": "Bearer 필요",
+    "summary": "계절별 은하 분석 리포트를 생성합니다. 이미 있으면 기존 리포트를 반환합니다.",
+    "status": [
+      "200",
+      "401",
+      "422",
+      "502"
+    ],
+    "pathParams": [
+      "year:int",
+      "season: SPRING|SUMMER|AUTUMN|WINTER"
+    ],
+    "requestFields": [
+      "요청 본문 없음"
+    ],
+    "responseFields": [
+      "GalaxyReportDetailResponse (GET /galaxy/reports/{id} 와 동일)"
+    ],
+    "errors": [
+      "422 INVALID_SEASON / FUTURE_SEASON",
+      "502 AI 오류"
+    ],
+    "notes": [],
+    "exampleRequest": "POST /api/v1/galaxy/reports/2026/SUMMER/generate",
+    "exampleResponse": {
+      "id": "...",
+      "year": 2026,
+      "season": "SUMMER"
+    }
+  },
+  {
+    "group": "Galaxy",
+    "method": "GET",
+    "path": "/api/v1/galaxy/reports",
+    "auth": "Bearer 필요",
+    "summary": "생성된 계절 리포트 목록을 조회합니다.",
+    "status": [
+      "200",
+      "401"
+    ],
+    "requestFields": [
+      "요청 본문 없음"
+    ],
+    "responseFields": [
+      "items[]: id, year, season, season_label, generated_through, total_star_count, created_at"
+    ],
+    "errors": [],
+    "notes": [],
+    "exampleRequest": "GET /api/v1/galaxy/reports",
+    "exampleResponse": {
+      "items": []
+    }
+  },
+  {
+    "group": "Galaxy",
+    "method": "GET",
+    "path": "/api/v1/galaxy/reports/{report_id}",
+    "auth": "Bearer 필요",
+    "summary": "계절 리포트 상세(통계 스냅샷 + AI 분석)를 조회합니다.",
+    "status": [
+      "200",
+      "401",
+      "404"
+    ],
+    "pathParams": [
+      "report_id:UUID"
+    ],
+    "requestFields": [
+      "요청 본문 없음"
+    ],
+    "responseFields": [
+      "id, year, season, season_label, season_start, season_end, generated_through, created_at",
+      "north_star_snapshot, statistics_snapshot, ai_analysis",
+      "reflection_question, reflection, reflection_updated_at"
+    ],
+    "errors": [
+      "404 GALAXY_REPORT_NOT_FOUND"
+    ],
+    "notes": [],
+    "exampleRequest": "GET /api/v1/galaxy/reports/{report_id}",
+    "exampleResponse": {
+      "id": "...",
+      "reflection": null
+    }
+  },
+  {
+    "group": "Galaxy",
+    "method": "PUT",
+    "path": "/api/v1/galaxy/reports/{report_id}/reflection",
+    "auth": "Bearer 필요",
+    "summary": "계절 리포트 종합 소감을 저장합니다.",
+    "status": [
+      "200",
+      "401",
+      "404",
+      "422"
+    ],
+    "pathParams": [
+      "report_id:UUID"
+    ],
+    "requestFields": [
+      "reflection:string required (1~500자)"
+    ],
+    "responseFields": [
+      "GalaxyReportDetailResponse"
+    ],
+    "errors": [
+      "404 GALAXY_REPORT_NOT_FOUND",
+      "422 INVALID_REFLECTION"
+    ],
+    "notes": [],
+    "exampleRequest": {
+      "reflection": "가족과 함께한 시간이 많았던 계절이었습니다."
+    },
+    "exampleResponse": {
+      "id": "...",
+      "reflection": "가족과 함께한 시간이 많았던 계절이었습니다."
+    }
+  }
+];
+function escapeHtml(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
+function renderValue(value) { if (value === undefined || value === null) return "-"; if (typeof value === "string") return escapeHtml(value); return escapeHtml(JSON.stringify(value, null, 2)); }
+function renderList(items) { if (!items || items.length === 0) return "<p class='small'>-</p>"; return "<ul>" + items.map(item => `<li>${escapeHtml(item)}</li>`).join("") + "</ul>"; }
+function renderEndpoint(endpoint) { return `<details class="endpoint" data-group="${escapeHtml(endpoint.group)}" data-text="${escapeHtml(JSON.stringify(endpoint).toLowerCase())}"><summary><div class="endpoint-head"><span class="method ${endpoint.method}">${endpoint.method}</span><span class="path">${escapeHtml(endpoint.path)}</span><span class="pill">${escapeHtml(endpoint.group)}</span><span class="desc">${escapeHtml(endpoint.summary)}</span></div></summary><div class="endpoint-body"><table><tbody><tr><th>인증</th><td>${escapeHtml(endpoint.auth || "-")}</td></tr><tr><th>Status</th><td>${(endpoint.status || []).map(s => `<span class="pill">${escapeHtml(s)}</span>`).join(" ")}</td></tr>${endpoint.pathParams ? `<tr><th>Path params</th><td>${renderList(endpoint.pathParams)}</td></tr>` : ""}${endpoint.query ? `<tr><th>Query</th><td>${renderList(endpoint.query)}</td></tr>` : ""}<tr><th>Request fields</th><td>${renderList(endpoint.requestFields)}</td></tr><tr><th>Response fields</th><td>${renderList(endpoint.responseFields)}</td></tr>${endpoint.errors && endpoint.errors.length ? `<tr><th>Errors</th><td>${renderList(endpoint.errors)}</td></tr>` : ""}${endpoint.notes && endpoint.notes.length ? `<tr><th>Notes</th><td>${renderList(endpoint.notes)}</td></tr>` : ""}</tbody></table><div class="two-col"><div><h4>Request example</h4><pre>${renderValue(endpoint.exampleRequest)}</pre></div><div><h4>Response example</h4><pre>${renderValue(endpoint.exampleResponse)}</pre></div></div></div></details>`; }
+function render() { const search = document.getElementById("search").value.trim().toLowerCase(); const group = document.getElementById("groupFilter").value; const filtered = endpoints.filter(endpoint => (!group || endpoint.group === group) && (!search || JSON.stringify(endpoint).toLowerCase().includes(search))); document.getElementById("endpoints").innerHTML = filtered.map(renderEndpoint).join(""); document.getElementById("count").textContent = `${filtered.length} / ${endpoints.length}개 표시`; }
+const groupFilter = document.getElementById("groupFilter"); [...new Set(endpoints.map(endpoint => endpoint.group))].sort().forEach(group => { const option = document.createElement("option"); option.value = group; option.textContent = group; groupFilter.appendChild(option); });
+document.getElementById("search").addEventListener("input", render); groupFilter.addEventListener("change", render); render();
+</script>
+</body>
+</html>
