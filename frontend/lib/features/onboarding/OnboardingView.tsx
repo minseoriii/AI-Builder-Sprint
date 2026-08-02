@@ -4,6 +4,7 @@ import {
   Alert,
   Animated,
   Easing,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -11,6 +12,7 @@ import {
   TextInput,
   TextStyle,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -20,7 +22,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   AppText,
-  BackButton,
   Colors,
   FontFamily,
   LogoIcon,
@@ -32,7 +33,8 @@ import {
   RoundStarIcon,
   RoundStarVariant,
   ScreenContainer,
-  ScreenLayout,
+  onboardingContentTop,
+  onboardingBackgroundImage,
   TagButton,
   withOpacity,
 } from '@/assets_shared';
@@ -42,8 +44,6 @@ import {
   saveNorthStar,
   type NorthStarCandidate,
 } from '@/lib/api/onboarding';
-
-const onboardingBackground = require('@/assets_shared/svg/empty.png');
 
 function usePrimaryButtonWidth(): number {
   const { width } = useWindowDimensions();
@@ -122,7 +122,7 @@ function SplashStarField() {
 function OnboardingBackground() {
   return (
     <Image
-      source={onboardingBackground}
+      source={onboardingBackgroundImage}
       style={StyleSheet.absoluteFill}
       contentFit="cover"
     />
@@ -233,24 +233,15 @@ function PolarisHeader({
   );
 }
 
-function StepIndicator({ step }: { step: Step }) {
-  if (step <= 1) return null;
+// ─── Step 1: Splash ────────────────────────────────────────────────────────
+
+function DismissKeyboardView({ children }: { children: React.ReactNode }) {
   return (
-    <View style={styles.stepIndicator} pointerEvents="none">
-      {([2, 3, 4] as const).map((s) => (
-        <View
-          key={s}
-          style={[
-            styles.stepBar,
-            step >= s ? styles.stepBarActive : styles.stepBarInactive,
-          ]}
-        />
-      ))}
-    </View>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={styles.flex}>{children}</View>
+    </TouchableWithoutFeedback>
   );
 }
-
-// ─── Step 1: Splash ────────────────────────────────────────────────────────
 
 function SplashScreen({ onNext }: { onNext: () => void }) {
   const { width } = useWindowDimensions();
@@ -294,7 +285,7 @@ function SplashScreen({ onNext }: { onNext: () => void }) {
           </AppText>
         </View>
       </View>
-      <View style={styles.splashFooter} pointerEvents="box-none">
+      <View style={styles.splashFooter}>
         <Pressable
           onPress={onNext}
           hitSlop={12}
@@ -330,7 +321,7 @@ function InputScreen({
 
   return (
     <View style={styles.flex}>
-      <ScreenContainer style={styles.flex} withTopPadding={false}>
+      <ScreenContainer style={styles.flex} topPadding={onboardingContentTop}>
         <PolarisHeader
           title="당신의 삶을 이끌어줄 북극성을 정해보세요."
           subtitle={
@@ -364,15 +355,85 @@ function InputScreen({
 
 // ─── Step 3: Category selection ────────────────────────────────────────────
 
+const TAG_COUNT_WARNING = '태그는 5가지를 선택해주세요';
+
 function SentenceHighlight({ sentence }: { sentence: string }) {
+  const starSize = 23;
+
   return (
     <View style={styles.sentenceHighlight}>
-      <RoundStarIcon variant={2} />
-      <AppText variant="emphasis" style={styles.sentenceHighlightText}>
-        {sentence}
-      </AppText>
-      <RoundStarIcon variant={2} />
+      <View style={styles.sentenceHighlightRow}>
+        <View style={styles.sentenceHighlightStarStart}>
+          <RoundStarIcon variant={2} size={starSize} />
+        </View>
+        <AppText variant="emphasis" style={styles.sentenceHighlightText}>
+          {sentence}
+        </AppText>
+        <View style={styles.sentenceHighlightStarEnd}>
+          <RoundStarIcon variant={2} size={starSize} />
+        </View>
+      </View>
     </View>
+  );
+}
+
+function useShakeAnimation() {
+  const shakeX = useRef(new Animated.Value(0)).current;
+
+  const triggerShake = useCallback(() => {
+    shakeX.setValue(0);
+    Animated.sequence([
+      Animated.timing(shakeX, {
+        toValue: 8,
+        duration: 50,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeX, {
+        toValue: -8,
+        duration: 50,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeX, {
+        toValue: 6,
+        duration: 50,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeX, {
+        toValue: -6,
+        duration: 50,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeX, {
+        toValue: 0,
+        duration: 50,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [shakeX]);
+
+  return { shakeX, triggerShake };
+}
+
+function TagCountWarning({
+  visible,
+  shakeX,
+}: {
+  visible: boolean;
+  shakeX: Animated.Value;
+}) {
+  if (!visible) return null;
+
+  return (
+    <Animated.View
+      style={[styles.tagCountWarning, { transform: [{ translateX: shakeX }] }]}
+    >
+      <AppText style={styles.tagCountWarningText}>{TAG_COUNT_WARNING}</AppText>
+    </Animated.View>
   );
 }
 
@@ -394,15 +455,42 @@ function CategoryScreen({
   error: string;
 }) {
   const buttonWidth = usePrimaryButtonWidth();
-  const canConfirm = selected.length === NORTH_STAR_SELECTED_COUNT;
+  const { shakeX, triggerShake } = useShakeAnimation();
+  const [showTagWarning, setShowTagWarning] = useState(false);
+
+  const triggerTagCountWarning = useCallback(() => {
+    setShowTagWarning(true);
+    triggerShake();
+  }, [triggerShake]);
+
+  const handleTagPress = useCallback(
+    (cat: string) => {
+      if (!selected.includes(cat) && selected.length >= NORTH_STAR_SELECTED_COUNT) {
+        triggerTagCountWarning();
+        return;
+      }
+      setShowTagWarning(false);
+      onToggle(cat);
+    },
+    [onToggle, selected, triggerTagCountWarning],
+  );
+
+  const handleConfirmPress = useCallback(() => {
+    if (selected.length !== NORTH_STAR_SELECTED_COUNT) {
+      triggerTagCountWarning();
+      return;
+    }
+    setShowTagWarning(false);
+    onConfirm();
+  }, [onConfirm, selected.length, triggerTagCountWarning]);
 
   return (
     <View style={styles.flex}>
-      <ScreenContainer style={styles.flex} contentStyle={styles.flex} withTopPadding={false}>
+      <ScreenContainer style={styles.flex} contentStyle={styles.flex} topPadding={onboardingContentTop}>
         <ScrollView
           style={styles.flex}
           contentContainerStyle={styles.categoryScrollContent}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="never"
         >
           <PolarisHeader
           title="당신만의 가치를 5가지 골라보세요."
@@ -420,7 +508,7 @@ function CategoryScreen({
                 key={cat}
                 label={cat}
                 selected={selected.includes(cat)}
-                onPress={() => onToggle(cat)}
+                onPress={() => handleTagPress(cat)}
               />
             ))}
           </View>
@@ -430,6 +518,8 @@ function CategoryScreen({
           <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={styles.linkBtn}>
             <AppText style={styles.linkBtnText}>문장 다시 쓰기</AppText>
           </TouchableOpacity>
+
+          <TagCountWarning visible={showTagWarning} shakeX={shakeX} />
         </View>
       </ScrollView>
       </ScreenContainer>
@@ -438,8 +528,7 @@ function CategoryScreen({
         <PrimaryButton
           size="large"
           label="성단 확정"
-          disabled={!canConfirm}
-          onPress={onConfirm}
+          onPress={handleConfirmPress}
           style={{ width: buttonWidth }}
         />
       </View>
@@ -470,11 +559,11 @@ function ConfirmScreen({
 
   return (
     <View style={styles.flex}>
-      <ScreenContainer style={styles.flex} contentStyle={styles.flex} withTopPadding={false}>
+      <ScreenContainer style={styles.flex} contentStyle={styles.flex} topPadding={onboardingContentTop}>
         <ScrollView
           style={styles.flex}
           contentContainerStyle={styles.confirmScrollContent}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="never"
         >
           <PolarisHeader
           title="이대로 북극성과 성단을 확정할까요?"
@@ -486,7 +575,7 @@ function ConfirmScreen({
 
           <View style={styles.tagWrap}>
             {selected.map((cat) => (
-              <TagButton key={cat} label={cat} selected disabled />
+              <TagButton key={cat} label={cat} selected />
             ))}
           </View>
 
@@ -527,6 +616,7 @@ export default function OnboardingView() {
   const router = useRouter();
   const [step, setStep] = useState<Step>(1);
   const [sentence, setSentence] = useState('');
+  const [analyzedSentence, setAnalyzedSentence] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [candidates, setCandidates] = useState<NorthStarCandidate[]>([]);
   const [analysisId, setAnalysisId] = useState<string | null>(null);
@@ -558,11 +648,24 @@ export default function OnboardingView() {
     const text = sentence.trim();
     if (!text || analyzing) return;
 
+    // 문장 다시 쓰기 후 내용이 같으면 API 재호출 없이 태그 선택으로
+    if (
+      text === analyzedSentence &&
+      analysisId &&
+      candidates.length > 0
+    ) {
+      setAnalyzeError('');
+      setCategoryError('');
+      setStep(3);
+      return;
+    }
+
     setAnalyzeError('');
     setAnalyzing(true);
     try {
       // POST /api/v1/onboarding/north-star/analyze  { text }
       const data = await analyzeNorthStar(text);
+      setAnalyzedSentence(text);
       setAnalysisId(data.analysis_id);
       setCandidates(data.candidates);
       setSelected([]);
@@ -574,13 +677,10 @@ export default function OnboardingView() {
     } finally {
       setAnalyzing(false);
     }
-  }, [analyzing, sentence]);
+  }, [analysisId, analyzedSentence, analyzing, candidates.length, sentence]);
 
   const handleCategoryConfirm = useCallback(() => {
     if (selected.length !== NORTH_STAR_SELECTED_COUNT) {
-      setCategoryError(
-        `성단은 정확히 ${NORTH_STAR_SELECTED_COUNT}개를 선택해야 합니다.`,
-      );
       return;
     }
     setCategoryError('');
@@ -615,18 +715,12 @@ export default function OnboardingView() {
     }
   }, [analysisId, router, saving, selected]);
 
-  const handleNavBack = useCallback(() => {
-    setCategoryError('');
-    setAnalyzeError('');
-    setStep((s) => (s - 1) as Step);
-  }, []);
-
   return (
     <View style={styles.root}>
       <OnboardingBackground />
       {step === 1 && <SplashStarField />}
       <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
-        <View style={styles.contentArea}>
+        <DismissKeyboardView>
         {step === 1 && <SplashScreen onNext={() => setStep(2)} />}
 
         {step === 2 && (
@@ -641,7 +735,7 @@ export default function OnboardingView() {
 
         {step === 3 && (
           <CategoryScreen
-            sentence={sentence}
+            sentence={analyzedSentence}
             categories={categoryLabels}
             selected={selected}
             onToggle={handleToggle}
@@ -656,7 +750,7 @@ export default function OnboardingView() {
 
         {step === 4 && (
           <ConfirmScreen
-            sentence={sentence}
+            sentence={analyzedSentence}
             selected={selected}
             onFinish={handleFinish}
             onBack={() => setStep(3)}
@@ -664,19 +758,7 @@ export default function OnboardingView() {
             error={saveError}
           />
         )}
-
-        <StepIndicator step={step} />
-
-        {(step === 2 || step === 3) && (
-          <View style={styles.navBackRow}>
-            <BackButton
-              onPress={handleNavBack}
-              disabled={analyzing}
-              iconSize={32}
-            />
-          </View>
-        )}
-        </View>
+        </DismissKeyboardView>
       </SafeAreaView>
       {analyzing && <AnalyzeLoadingScreen />}
     </View>
@@ -694,16 +776,12 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  contentArea: {
-    flex: 1,
-    paddingTop: ScreenLayout.onboardingTop,
-  },
   scrollContent: {
     flexGrow: 1,
     paddingBottom: 24,
   },
   splashCenter: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 24,
@@ -729,10 +807,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   splashFooter: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 120,
+    paddingBottom: 120,
     alignItems: 'center',
   },
   polarisHeader: {
@@ -822,19 +897,40 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   sentenceHighlight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
+    width: '100%',
     paddingHorizontal: 8,
   },
+  sentenceHighlightRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    width: '100%',
+  },
+  sentenceHighlightStarStart: {
+    alignSelf: 'flex-start',
+  },
+  sentenceHighlightStarEnd: {
+    alignSelf: 'flex-end',
+  },
   sentenceHighlightText: {
+    flex: 1,
     flexShrink: 1,
     fontSize: 16,
     lineHeight: 26,
     textAlign: 'center',
     fontFamily: FontFamily.bold,
     color: Palette.cream,
+    paddingHorizontal: 8,
+  },
+  tagCountWarning: {
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  tagCountWarningText: {
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+    color: Palette.cream,
+    fontFamily: FontFamily.medium,
   },
   categoryBlock: {
     gap: 16,
@@ -843,8 +939,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    justifyContent: 'flex-start',
-    alignContent: 'flex-start',
+    justifyContent: 'center',
+    alignContent: 'center',
     width: '100%',
   },
   selectCountRow: {
@@ -896,31 +992,5 @@ const styles = StyleSheet.create({
   confirmTitle: {
     fontFamily: FontFamily.medium,
     fontWeight: '500',
-  },
-  stepIndicator: {
-    position: 'absolute',
-    top: ScreenLayout.onboardingTop,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  stepBar: {
-    height: 1,
-  },
-  stepBarActive: {
-    width: 24,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-  },
-  stepBarInactive: {
-    width: 12,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-  },
-  navBackRow: {
-    position: 'absolute',
-    top: ScreenLayout.onboardingTop,
-    left: 0,
-    zIndex: 10,
   },
 });

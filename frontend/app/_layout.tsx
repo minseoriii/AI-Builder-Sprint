@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
@@ -30,9 +30,17 @@ export default function RootLayout() {
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(
     null,
   );
+  const devBootRedirected = useRef(false);
 
   useEffect(() => {
     if (!fontsLoaded) return;
+
+    // Expo Go 개발: reload마다 온보딩부터 (백엔드 완료 상태 무시)
+    if (__DEV__) {
+      setOnboardingCompleted(false);
+      setGateReady(true);
+      return;
+    }
 
     let cancelled = false;
 
@@ -62,7 +70,20 @@ export default function RootLayout() {
   const inOnboarding = segments[0] === 'onboarding';
 
   useEffect(() => {
-    if (!gateReady || onboardingCompleted === null) return;
+    if (!gateReady) return;
+
+    if (__DEV__) {
+      // reload 시 1회만 온보딩으로 — 관측 시작하기 후 홈 이동은 유지
+      if (!devBootRedirected.current) {
+        devBootRedirected.current = true;
+        if (!inOnboarding) {
+          router.replace('/onboarding');
+        }
+      }
+      return;
+    }
+
+    if (onboardingCompleted === null) return;
 
     if (!onboardingCompleted && !inOnboarding) {
       router.replace('/onboarding');
@@ -77,8 +98,7 @@ export default function RootLayout() {
   const canShowApp =
     fontsLoaded &&
     gateReady &&
-    onboardingCompleted !== null &&
-    (onboardingCompleted ? !inOnboarding : inOnboarding);
+    (__DEV__ || onboardingCompleted !== null);
 
   if (!canShowApp) {
     return <LoadingScreen />;

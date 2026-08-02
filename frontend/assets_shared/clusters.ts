@@ -15,7 +15,7 @@ export function getClusterLabelColor(index: ClusterIndex): string {
   return Colors.clusterLabel[index];
 }
 
-/** SVG 원본 viewBox 크기 — 비율 유지 스케일용 */
+/** PNG 원본 크기 — 비율 유지 스케일용 */
 export const CLUSTER_ICON_VIEWBOX: Record<
   ClusterIndex,
   { width: number; height: number }

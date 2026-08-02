@@ -1,8 +1,12 @@
 import { Image } from 'expo-image';
-import Svg, { Circle } from 'react-native-svg';
 
-const polarisImage = require('./ic_polaris.png');
-const logoImage = require('./Logo.png');
+import {
+  logoImage,
+  polarisImage,
+  roundStar1Image,
+  roundStar2Image,
+  roundStar3Image,
+} from './images';
 
 interface SizedIconProps {
   size?: number;
@@ -36,30 +40,36 @@ export function LogoIcon({ width = 241 }: LogoProps) {
   );
 }
 
-/** ic_roundstar1.svg */
+/** ic_roundstar1.png */
 export function RoundStar1({ size = 27 }: SizedIconProps) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 27 27" fill="none">
-      <Circle cx="13.1" cy="13.1" r="2" fill="#FFF9DD" />
-    </Svg>
+    <Image
+      source={roundStar1Image}
+      style={{ width: size, height: size }}
+      contentFit="contain"
+    />
   );
 }
 
-/** ic_roundstar2.svg */
+/** ic_roundstar2.png */
 export function RoundStar2({ size = 23 }: SizedIconProps) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 23 23" fill="none">
-      <Circle cx="11.1" cy="11.1" r="1" fill="#FFF9DD" />
-    </Svg>
+    <Image
+      source={roundStar2Image}
+      style={{ width: size, height: size }}
+      contentFit="contain"
+    />
   );
 }
 
-/** ic_roundstar3.svg */
+/** ic_roundstar3.png */
 export function RoundStar3({ size = 22 }: SizedIconProps) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 22 22" fill="none">
-      <Circle cx="10.6" cy="10.6" r="0.5" fill="#FFF9DD" />
-    </Svg>
+    <Image
+      source={roundStar3Image}
+      style={{ width: size, height: size }}
+      contentFit="contain"
+    />
   );
 }
 

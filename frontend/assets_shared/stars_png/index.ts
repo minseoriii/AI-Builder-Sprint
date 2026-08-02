@@ -4,7 +4,7 @@ export {
   ClusterIcon3,
   ClusterIcon4,
   ClusterIcon5,
-  ClusterSvgIcon,
+  ClusterPngIcon,
 } from './ClusterIcons';
 
 export {
@@ -16,3 +16,13 @@ export {
   RoundStarIcon,
 } from './SplashIcons';
 export type { RoundStarVariant } from './SplashIcons';
+
+export {
+  clusterImages,
+  logoImage,
+  onboardingBackgroundImage,
+  polarisImage,
+  roundStar1Image,
+  roundStar2Image,
+  roundStar3Image,
+} from './images';
