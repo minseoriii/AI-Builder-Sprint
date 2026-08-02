@@ -394,7 +394,11 @@ export default function ObservatoryView() {
     if (tabId === 'observatory') {
       return;
     }
-    // 은하감상 / 혜성관측소 / 마이페이지 — 추후 라우트 연동
+    if (tabId === 'galaxy') {
+      router.push('/galaxy-view');
+      return;
+    }
+    // 혜성관측소 / 마이페이지 — 추후 라우트 연동
   };
 
   return (

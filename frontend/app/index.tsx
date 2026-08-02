@@ -385,6 +385,10 @@ function HomeScreen() {
   };
 
   const handleTabPress = (tabId: Tab) => {
+    if (tabId === 'galaxy') {
+      router.push('/galaxy-view');
+      return;
+    }
     if (tabId === 'observatory') {
       router.push('/observatory');
       return;
