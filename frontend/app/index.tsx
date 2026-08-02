@@ -38,7 +38,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'galaxy', label: '은하감상' },
   { id: 'observatory', label: '천문연구소' },
   { id: 'home', label: '홈' },
-  { id: 'comet', label: '해성관측소' },
+  { id: 'comet', label: '혜성관측소' },
   { id: 'mypage', label: '마이페이지' },
 ];
 
@@ -384,6 +384,18 @@ function HomeScreen() {
     router.push('/star-record');
   };
 
+  const handleTabPress = (tabId: Tab) => {
+    if (tabId === 'observatory') {
+      router.push('/observatory');
+      return;
+    }
+    if (tabId === 'home') {
+      setActiveTab('home');
+      return;
+    }
+    setActiveTab(tabId);
+  };
+
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
@@ -507,7 +519,7 @@ function HomeScreen() {
                 return (
                   <TouchableOpacity
                     key={tab.id}
-                    onPress={() => setActiveTab(tab.id)}
+                    onPress={() => handleTabPress(tab.id)}
                     activeOpacity={0.7}
                     style={[styles.tabBtn, isActive && styles.tabBtnActive]}
                   >
