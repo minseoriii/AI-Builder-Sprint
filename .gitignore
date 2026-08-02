@@ -8,3 +8,6 @@
 Thumbs.db
 .idea/
 .vscode/
+
+# Generated API spec HTML (regenerate: python backend/scripts/generate_api_spec.py)
+docs/API_SPEC_*.html

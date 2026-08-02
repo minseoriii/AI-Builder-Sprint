@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "ieum-api-collection",
+    "_postman_id": "polaris-api-collection",
     "name": "Polaris API (가치 정렬 AI 저널)",
-    "description": "Polaris 백엔드 API Postman Collection — 2026-08-01 develop 기준",
+    "description": "Polaris 백엔드 API Postman Collection — 2026-08-02 develop 기준",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -869,7 +869,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"analysis_id\": \"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\",\n  \"selected_categories\": [\n    \"가족\",\n    \"건강\",\n    \"성장·배움\"\n  ]\n}"
+              "raw": "{\n  \"analysis_id\": \"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\",\n  \"selected_categories\": [\n    \"가족\",\n    \"건강\",\n    \"성장·배움\",\n    \"관계·사랑\",\n    \"균형·조화\"\n  ]\n}"
             }
           },
           "response": []
