@@ -16,6 +16,7 @@ import {
   BottomNavigationBar,
   ResponsiveScreen,
   createResponsiveStylesContext,
+  useAutoRefreshOnFocus,
 } from '@/assets_shared';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -290,11 +291,18 @@ function ReportPlaceholder() {
 export default function ObservatoryView() {
   const styles = useScreenStyles(OBSERVATORY_STYLE_DEF);
   const [activeTab, setActiveTab] = useState<SubTab>('stats');
-  const [mockData] = useState<ObservatoryMockData>(MOCK_DATA);
+  const [mockData, setMockData] = useState<ObservatoryMockData>(MOCK_DATA);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useAutoRefreshOnFocus(() => {
+    setRefreshKey((key) => key + 1);
+    setMockData(MOCK_DATA);
+    setActiveTab('stats');
+  });
 
   return (
     <StylesProvider styles={styles}>
-      <ResponsiveScreen style={{ backgroundColor: COLORS.bgDeep }}>
+      <ResponsiveScreen key={refreshKey} style={{ backgroundColor: COLORS.bgDeep }}>
         <View style={styles.root}>
           <LinearGradient
             colors={['#0d1f48', '#081432', COLORS.bgDeep]}

@@ -4,6 +4,8 @@
  */
 export const ImageAssets = {
   background: require('./background.png'),
+  home_orbit: require('./home_orbit.png'),
+  home_btn_makestar: require('./home_btn_makestar.png'),
   ic_cluster1: require('./ic_cluster1.png'),
   ic_cluster2: require('./ic_cluster2.png'),
   ic_cluster3: require('./ic_cluster3.png'),

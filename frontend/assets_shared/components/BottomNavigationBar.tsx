@@ -3,6 +3,7 @@ import { useRouter, type Href } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Palette, withOpacity } from '../colors';
+import { requestScreenRefresh } from '../hooks/screenRefreshBus';
 import {
   icComet,
   icGalaxyView,
@@ -91,7 +92,10 @@ export function BottomNavigationBar({ activeTab }: BottomNavigationBarProps) {
   const labelSize = fontScale(BottomNavigationBarDimensions.fontSize);
 
   const handlePress = (tabId: BottomNavTab) => {
-    if (tabId === activeTab) return;
+    if (tabId === activeTab) {
+      requestScreenRefresh();
+      return;
+    }
     router.navigate(TAB_ROUTES[tabId]);
   };
 

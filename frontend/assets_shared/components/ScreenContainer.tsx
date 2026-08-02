@@ -1,6 +1,15 @@
 import { ReactNode } from 'react';
-import { StyleSheet, View, ViewProps, ViewStyle } from 'react-native';
+import {
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+  ViewProps,
+  ViewStyle,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Palette } from '../colors';
 import { useResponsive } from '../responsive';
 import { ScreenLayout } from '../spacing';
 
@@ -12,6 +21,11 @@ export interface ScreenContainerProps extends ViewProps {
   topPadding?: number;
   /** 기본 horizontal(20) 여백 적용 여부 */
   withHorizontalPadding?: boolean;
+  /** Safe Area(상·하) 적용 — 안드로이드 포함 */
+  withSafeArea?: boolean;
+  /** pull-to-refresh 콜백 — 있으면 ScrollView + RefreshControl */
+  onRefresh?: () => void | Promise<void>;
+  refreshing?: boolean;
   style?: ViewStyle;
   contentStyle?: ViewStyle;
 }
@@ -22,23 +36,66 @@ export function ScreenContainer({
   withTopPadding = true,
   topPadding = ScreenLayout.top,
   withHorizontalPadding = true,
+  withSafeArea = false,
+  onRefresh,
+  refreshing = false,
   style,
   contentStyle,
   ...rest
 }: ScreenContainerProps) {
   const { scale } = useResponsive();
 
+  const paddingStyle: ViewStyle = {
+    ...(withHorizontalPadding
+      ? { paddingHorizontal: scale(ScreenLayout.horizontal) }
+      : null),
+    ...(withTopPadding ? { paddingTop: scale(topPadding) } : null),
+  };
+
+  let content: ReactNode;
+
+  if (onRefresh) {
+    content = (
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={[styles.scrollContent, paddingStyle, contentStyle]}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              void onRefresh();
+            }}
+            tintColor={Palette.cream}
+            colors={[Palette.cream]}
+          />
+        }
+      >
+        {children}
+      </ScrollView>
+    );
+  } else {
+    content = (
+      <View style={[styles.root, paddingStyle, contentStyle]} {...rest}>
+        {children}
+      </View>
+    );
+  }
+
+  if (withSafeArea) {
+    return (
+      <SafeAreaView style={[styles.root, style]} edges={['top', 'bottom']}>
+        {content}
+      </SafeAreaView>
+    );
+  }
+
+  if (onRefresh) {
+    return <View style={[styles.root, style]}>{content}</View>;
+  }
+
   return (
-    <View
-      style={[
-        styles.root,
-        withHorizontalPadding && { paddingHorizontal: scale(ScreenLayout.horizontal) },
-        style,
-        contentStyle,
-        withTopPadding && { paddingTop: scale(topPadding) },
-      ]}
-      {...rest}
-    >
+    <View style={[styles.root, paddingStyle, style, contentStyle]} {...rest}>
       {children}
     </View>
   );
@@ -47,6 +104,12 @@ export function ScreenContainer({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  flex: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
 });
 
