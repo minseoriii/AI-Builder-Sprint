@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     upstage_base_url: str = "https://api.upstage.ai/v1"
     upstage_model: str = "solar-pro3"
 
-    ai_timeout_seconds: int = 30
+    ai_timeout_seconds: int = 60
     supabase_auth_timeout_seconds: int = 10
     north_star_analysis_ttl_hours: int = 24
     daily_record_analysis_ttl_hours: int = 24

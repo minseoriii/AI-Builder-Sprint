@@ -1,4 +1,4 @@
-import { getValidAccessToken } from '@/lib/supabase';
+import { getValidAccessToken, refreshAccessToken } from '@/lib/supabase';
 import { getApiBaseUrl } from '@/lib/env';
 
 interface ApiErrorDetail {
@@ -114,6 +114,7 @@ async function apiRequest<T>(
   method: 'GET' | 'POST' | 'PUT',
   endpointPath: string,
   body?: unknown,
+  allowAuthRetry = true,
 ): Promise<T> {
   const url = buildApiUrl(endpointPath);
   const headers = await buildApiHeaders();
@@ -138,6 +139,14 @@ async function apiRequest<T>(
 
   if (!response.ok) {
     const detail = extractErrorDetail(data);
+    if (response.status === 401 && allowAuthRetry) {
+      try {
+        await refreshAccessToken();
+        return apiRequest<T>(method, endpointPath, body, false);
+      } catch {
+        // fall through to normal error handling
+      }
+    }
     const isHtml = raw.trimStart().startsWith('<!DOCTYPE') || raw.trimStart().startsWith('<html');
     const fallback = isHtml
       ? '백엔드 서버 연결에 실패했습니다. Cloudflare 터널/백엔드 실행 상태를 확인해 주세요.'
