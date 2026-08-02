@@ -116,6 +116,9 @@ export default function RootLayout() {
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="star-record" />
         <Stack.Screen name="galaxy-view" />
+        <Stack.Screen name="observatory" />
+        <Stack.Screen name="comet" />
+        <Stack.Screen name="mypage" />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
       <StatusBar style="light" />

@@ -15,9 +15,9 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Ellipse, Line, Path } from 'react-native-svg';
 
-// ─── Types ─────────────────────────────────────────────────────────────────
+import { BottomNavigationBar } from '@/assets_shared';
 
-type Tab = 'galaxy' | 'observatory' | 'home' | 'comet' | 'mypage';
+// ─── Types ─────────────────────────────────────────────────────────────────
 
 interface Cluster {
   id: string;
@@ -32,14 +32,6 @@ const CLUSTERS: Cluster[] = [
   { id: 'c3', label: '관계·사랑' },
   { id: 'c4', label: '모험·도전' },
   { id: 'c5', label: '건강' },
-];
-
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'galaxy', label: '은하감상' },
-  { id: 'observatory', label: '천문연구소' },
-  { id: 'home', label: '홈' },
-  { id: 'comet', label: '혜성관측소' },
-  { id: 'mypage', label: '마이페이지' },
 ];
 
 // ─── Helper: Date ──────────────────────────────────────────────────────────
@@ -104,63 +96,6 @@ function CreateStarIcon() {
       />
     </Svg>
   );
-}
-
-function TabIcon({ id, color }: { id: Tab; color: string }) {
-  switch (id) {
-    case 'galaxy':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-          <Circle cx="12" cy="12" r="10" stroke={color} strokeWidth={1.5} />
-          <Ellipse cx="12" cy="12" rx="4" ry="10" stroke={color} strokeWidth={1.5} />
-          <Line x1="2" y1="12" x2="22" y2="12" stroke={color} strokeWidth={1.5} />
-        </Svg>
-      );
-    case 'observatory':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-          <Path
-            d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"
-            stroke={color}
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </Svg>
-      );
-    case 'home':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 24 24" fill={color}>
-          <Path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
-        </Svg>
-      );
-    case 'comet':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-          <Circle cx="12" cy="12" r="3" stroke={color} strokeWidth={1.5} />
-          <Path
-            d="M12 2v2M12 20v2M2 12h2M20 12h2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
-            stroke={color}
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </Svg>
-      );
-    case 'mypage':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-          <Path
-            d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
-            stroke={color}
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <Circle cx="12" cy="7" r="4" stroke={color} strokeWidth={1.5} />
-        </Svg>
-      );
-  }
 }
 
 // ─── Twinkle animation helper ──────────────────────────────────────────────
@@ -367,7 +302,6 @@ export default function Index() {
 function HomeScreen() {
   const router = useRouter();
   const { width: screenW } = useWindowDimensions();
-  const [activeTab, setActiveTab] = useState<Tab>('home');
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
   const { year, month, day, weekday, season } = getDateInfo();
@@ -382,22 +316,6 @@ function HomeScreen() {
 
   const handleCreateStar = () => {
     router.push('/star-record');
-  };
-
-  const handleTabPress = (tabId: Tab) => {
-    if (tabId === 'galaxy') {
-      router.push('/galaxy-view');
-      return;
-    }
-    if (tabId === 'observatory') {
-      router.push('/observatory');
-      return;
-    }
-    if (tabId === 'home') {
-      setActiveTab('home');
-      return;
-    }
-    setActiveTab(tabId);
   };
 
   return (
@@ -514,33 +432,9 @@ function HomeScreen() {
             </View>
           </View>
 
-          {/* ── Bottom Nav ──────────────────────────────────────────── */}
-          <SafeAreaView edges={['bottom']} style={styles.navSafe}>
-            <View style={styles.nav}>
-              {TABS.map((tab) => {
-                const isActive = tab.id === activeTab;
-                const color = isActive ? '#e8eef8' : 'rgba(122,156,200,0.55)';
-                return (
-                  <TouchableOpacity
-                    key={tab.id}
-                    onPress={() => handleTabPress(tab.id)}
-                    activeOpacity={0.7}
-                    style={[styles.tabBtn, isActive && styles.tabBtnActive]}
-                  >
-                    <TabIcon id={tab.id} color={color} />
-                    <Text
-                      style={[styles.tabLabel, isActive && styles.tabLabelActive]}
-                      numberOfLines={1}
-                    >
-                      {tab.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </SafeAreaView>
         </SafeAreaView>
 
+        <BottomNavigationBar activeTab="home" />
         <PolarisModal visible={modalOpen} onClose={() => setModalOpen(false)} />
       </LinearGradient>
     </View>
@@ -700,42 +594,6 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: 'rgba(200,218,255,0.6)',
     letterSpacing: -0.13,
-  },
-  navSafe: {
-    backgroundColor: 'rgba(8,20,48,0.92)',
-  },
-  nav: {
-    zIndex: 20,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.07)',
-    paddingTop: 8,
-    paddingHorizontal: 4,
-    paddingBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-  },
-  tabBtn: {
-    borderRadius: 12,
-    paddingTop: 8,
-    paddingBottom: 6,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    gap: 3,
-    minWidth: 56,
-  },
-  tabBtnActive: {
-    backgroundColor: 'rgba(200,218,255,0.1)',
-  },
-  tabLabel: {
-    fontSize: 10,
-    fontWeight: '400',
-    color: 'rgba(122,156,200,0.55)',
-    letterSpacing: -0.1,
-  },
-  tabLabelActive: {
-    fontWeight: '500',
-    color: '#e8eef8',
   },
   bgStar: {
     position: 'absolute',

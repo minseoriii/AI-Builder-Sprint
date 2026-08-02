@@ -24,6 +24,13 @@ export { ClusterIcon } from './components/ClusterIcon';
 export type { ClusterIconProps } from './components/ClusterIcon';
 
 export {
+  BottomNavigationBar,
+  BottomNavigationBarDimensions,
+  bottomNavigationInset,
+} from './components/BottomNavigationBar';
+export type { BottomNavTab, BottomNavigationBarProps } from './components/BottomNavigationBar';
+
+export {
   CLUSTER_LABEL_COLORS,
   CLUSTER_ICON_VIEWBOX,
   getClusterLabelColor,

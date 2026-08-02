@@ -9,15 +9,15 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg';
 
+import { BottomNavigationBar } from '@/assets_shared';
+
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 type CurrentView = 'GALLERY' | 'CONSTELLATION' | 'STAR';
-type NavTab = 'galaxy' | 'observatory' | 'home' | 'comet' | 'mypage';
 
 type StarTags = {
   who: string;
@@ -561,14 +561,6 @@ const GALLERY_ITEMS: GalleryItem[] = [
   },
 ];
 
-const NAV_TABS: { id: NavTab; label: string }[] = [
-  { id: 'galaxy', label: '은하감상' },
-  { id: 'observatory', label: '천문연구소' },
-  { id: 'home', label: '홈' },
-  { id: 'comet', label: '혜성관측소' },
-  { id: 'mypage', label: '마이페이지' },
-];
-
 const FILTER_PILLS = ['2026년', '여름', '성단 선택'] as const;
 
 const STAR_TAGS_ORDER: { key: keyof StarTags; label: string }[] = [
@@ -768,124 +760,6 @@ function ClusterIcon({ small = false }: { small?: boolean }) {
         <Circle key={i} cx={x} cy={y} r={2} fill="#A78BFA" opacity={0.8} />
       ))}
     </Svg>
-  );
-}
-
-// ─── Bottom Nav Icons ──────────────────────────────────────────────────────
-
-function NavTabIcon({ id, active }: { id: NavTab; active: boolean }) {
-  const activeColor = COLORS.cyan;
-  const idleColor = COLORS.textMuted;
-  const c = active ? activeColor : idleColor;
-
-  switch (id) {
-    case 'galaxy':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 22 22" fill="none">
-          <Circle cx={11} cy={11} r={4} fill={c} opacity={active ? 0.9 : 0.7} />
-          {active ? (
-            <Circle cx={11} cy={11} r={7} stroke={COLORS.cyan} strokeWidth={1} opacity={0.3} />
-          ) : null}
-          <Circle cx={4} cy={6} r={1.5} fill={active ? '#A78BFA' : idleColor} opacity={0.8} />
-          <Circle cx={18} cy={8} r={1} fill={active ? '#A78BFA' : idleColor} opacity={0.7} />
-          <Circle cx={6} cy={17} r={1} fill={active ? COLORS.cyan : idleColor} opacity={0.6} />
-          <Circle cx={17} cy={16} r={1.5} fill={active ? '#A78BFA' : idleColor} opacity={0.7} />
-        </Svg>
-      );
-    case 'observatory':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 22 22" fill="none">
-          <Path d="M9 13h4v6a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-6z" fill={c} />
-          <Path d="M4 13 Q11 4 18 13" stroke={c} strokeWidth={1.5} fill="none" />
-          <Line x1={11} y1={4} x2={11} y2={2} stroke={c} strokeWidth={1.5} />
-        </Svg>
-      );
-    case 'home':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 22 22" fill="none">
-          <Path
-            d="M3 10L11 3L19 10V19H14V14H8V19H3V10Z"
-            stroke={c}
-            strokeWidth={1.5}
-            fill="none"
-            strokeLinejoin="round"
-          />
-        </Svg>
-      );
-    case 'comet':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 22 22" fill="none">
-          <Circle cx={15} cy={7} r={3} fill={c} opacity={0.9} />
-          <Path d="M13 9L4 18" stroke={c} strokeWidth={1.5} strokeLinecap="round" />
-          <Path
-            d="M11 11L4 14"
-            stroke={c}
-            strokeWidth={1}
-            strokeLinecap="round"
-            opacity={0.5}
-          />
-          <Path
-            d="M13 13L8 18"
-            stroke={c}
-            strokeWidth={1}
-            strokeLinecap="round"
-            opacity={0.4}
-          />
-        </Svg>
-      );
-    case 'mypage':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 22 22" fill="none">
-          <Circle cx={11} cy={8} r={3.5} stroke={c} strokeWidth={1.5} />
-          <Path
-            d="M4 19C4 15.686 7.134 13 11 13C14.866 13 18 15.686 18 19"
-            stroke={c}
-            strokeWidth={1.5}
-            strokeLinecap="round"
-          />
-        </Svg>
-      );
-  }
-}
-
-function BottomNav({
-  activeNav,
-  onPress,
-}: {
-  activeNav: NavTab;
-  onPress: (id: NavTab) => void;
-}) {
-  return (
-    <View style={styles.bottomNav}>
-      <LinearGradient
-        colors={['rgba(8,10,28,0.85)', 'rgba(8,10,28,0.97)']}
-        style={StyleSheet.absoluteFill}
-      />
-      <SafeAreaView edges={['bottom']} style={styles.navSafe}>
-        <View style={styles.nav}>
-          {NAV_TABS.map((tab) => {
-            const isActive = tab.id === activeNav;
-            return (
-              <TouchableOpacity
-                key={tab.id}
-                onPress={() => onPress(tab.id)}
-                activeOpacity={0.7}
-                style={[styles.navItem, isActive && styles.navItemActive]}
-              >
-                {isActive ? <View style={styles.navGlow} pointerEvents="none" /> : null}
-                <NavTabIcon id={tab.id} active={isActive} />
-                <Text
-                  style={[styles.navLabel, isActive && styles.navLabelActive]}
-                  numberOfLines={1}
-                >
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </SafeAreaView>
-    </View>
   );
 }
 
@@ -1171,12 +1045,10 @@ function StarView({
 // ─── Main View ─────────────────────────────────────────────────────────────
 
 export default function GalaxyView() {
-  const router = useRouter();
   const [currentView, setCurrentView] = useState<CurrentView>('GALLERY');
   const [clusterIdx, setClusterIdx] = useState(0);
   const [constIdx, setConstIdx] = useState(0);
   const [starIdx, setStarIdx] = useState(0);
-  const activeNav: NavTab = 'galaxy';
 
   const cluster = CLUSTERS[clusterIdx];
   const constellation = cluster.constellations[constIdx];
@@ -1216,19 +1088,6 @@ export default function GalaxyView() {
 
   const prevStar = () => setStarIdx((i) => Math.max(0, i - 1));
   const nextStar = () => setStarIdx((i) => Math.min(stars.length - 1, i + 1));
-
-  const handleNavPress = (tabId: NavTab) => {
-    if (tabId === 'home') {
-      router.push('/');
-      return;
-    }
-    if (tabId === 'observatory') {
-      router.push('/observatory');
-      return;
-    }
-    if (tabId === 'galaxy') return;
-    // 혜성관측소 / 마이페이지 — 추후 라우트 연동
-  };
 
   return (
     <View style={styles.root}>
@@ -1291,7 +1150,7 @@ export default function GalaxyView() {
         </View>
       </SafeAreaView>
 
-      <BottomNav activeNav={activeNav} onPress={handleNavPress} />
+      <BottomNavigationBar activeTab="galaxy" />
     </View>
   );
 }
@@ -1595,55 +1454,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.textPrimary,
     zIndex: 1,
-  },
-
-  bottomNav: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 100,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.07)',
-  },
-  navSafe: {
-    backgroundColor: 'transparent',
-  },
-  nav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingTop: 8,
-    paddingHorizontal: 4,
-    paddingBottom: 4,
-    height: 64,
-  },
-  navItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    minHeight: 48,
-    position: 'relative',
-  },
-  navItemActive: {},
-  navGlow: {
-    position: 'absolute',
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(0,245,255,0.12)',
-    top: -2,
-  },
-  navLabel: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: COLORS.textMuted,
-  },
-  navLabelActive: {
-    color: COLORS.cyan,
-    textShadowColor: 'rgba(0,245,255,0.6)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
   },
 });
