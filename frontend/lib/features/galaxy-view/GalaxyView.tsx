@@ -13,7 +13,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg';
 
-import { BottomNavigationBar } from '@/assets_shared';
+import {
+  BottomNavigationBar,
+  ResponsiveScreen,
+  createResponsiveStylesContext,
+  useResponsive,
+} from '@/assets_shared';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -609,6 +614,7 @@ const STAR_DOTS = [
 ];
 
 function StarField() {
+  const styles = useStyles();
   const { width, height } = useWindowDimensions();
 
   return (
@@ -766,6 +772,8 @@ function ClusterIcon({ small = false }: { small?: boolean }) {
 // ─── Shared CTA ────────────────────────────────────────────────────────────
 
 function PrimaryButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const styles = useStyles();
+
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.88} style={styles.primaryBtn}>
       <LinearGradient
@@ -780,6 +788,8 @@ function PrimaryButton({ label, onPress }: { label: string; onPress: () => void 
 }
 
 function BackIconButton({ onPress }: { onPress: () => void }) {
+  const styles = useStyles();
+
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -815,6 +825,7 @@ function GalleryCard({
   cardWidth: number;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   const bgDots = Array.from({ length: 8 }, (_, j) => ({
     topPct: 15 + ((j * 31 + index * 17) % 70),
     leftPct: 10 + ((j * 43 + index * 23) % 80),
@@ -867,6 +878,7 @@ function GalleryCard({
 }
 
 function GalleryView({ onSelectItem }: { onSelectItem: (item: GalleryItem) => void }) {
+  const styles = useStyles();
   const { width } = useWindowDimensions();
   const gap = 12;
   const horizontalPad = 16;
@@ -909,6 +921,8 @@ function ConstellationView({
   onViewStars: () => void;
   onBack: () => void;
 }) {
+  const styles = useStyles();
+
   return (
     <ScrollView
       style={styles.flex}
@@ -974,6 +988,7 @@ function StarView({
   onNext: () => void;
   onBack: () => void;
 }) {
+  const styles = useStyles();
   const star = stars[starIdx];
   const isFirst = starIdx === 0;
   const isLast = starIdx === stars.length - 1;
@@ -1045,6 +1060,7 @@ function StarView({
 // ─── Main View ─────────────────────────────────────────────────────────────
 
 export default function GalaxyView() {
+  const styles = useScreenStyles(GALAXY_STYLE_DEF);
   const [currentView, setCurrentView] = useState<CurrentView>('GALLERY');
   const [clusterIdx, setClusterIdx] = useState(0);
   const [constIdx, setConstIdx] = useState(0);
@@ -1090,74 +1106,76 @@ export default function GalaxyView() {
   const nextStar = () => setStarIdx((i) => Math.min(stars.length - 1, i + 1));
 
   return (
-    <View style={styles.root}>
-      <LinearGradient
-        colors={['#0F1430', '#0B0D1B', '#090C20', '#0D0F24']}
-        locations={[0, 0.35, 0.65, 1]}
-        style={StyleSheet.absoluteFill}
-      />
-      <StarField />
+    <StylesProvider styles={styles}>
+      <ResponsiveScreen style={{ backgroundColor: COLORS.bgDeep }}>
+        <LinearGradient
+          colors={['#0F1430', '#0B0D1B', '#090C20', '#0D0F24']}
+          locations={[0, 0.35, 0.65, 1]}
+          style={StyleSheet.absoluteFill}
+        />
+        <StarField />
 
-      {/* Nebula glow blobs */}
-      <View style={styles.nebulaPurple} pointerEvents="none" />
-      <View style={styles.nebulaCyan} pointerEvents="none" />
-      <View style={styles.nebulaViolet} pointerEvents="none" />
+        {/* Nebula glow blobs */}
+        <View style={styles.nebulaPurple} pointerEvents="none" />
+        <View style={styles.nebulaCyan} pointerEvents="none" />
+        <View style={styles.nebulaViolet} pointerEvents="none" />
 
-      <SafeAreaView style={styles.flex} edges={['top']}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>은하감상</Text>
-          <Text style={styles.headerSubtitle}>
-            &quot;2026년 여름의 은하에서 관측된 빛&quot;
-          </Text>
-        </View>
+        <SafeAreaView style={styles.flex} edges={['top']}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>은하감상</Text>
+            <Text style={styles.headerSubtitle}>
+              &quot;2026년 여름의 은하에서 관측된 빛&quot;
+            </Text>
+          </View>
 
-        {/* Filter pills only — no mode tabs */}
-        <View style={styles.filterRow}>
-          {FILTER_PILLS.map((label) => (
-            <TouchableOpacity key={label} activeOpacity={0.85} style={styles.filterPill}>
-              <Text style={styles.filterPillText}>{label}</Text>
-              <Text style={styles.filterCaret}>▾</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+          {/* Filter pills only — no mode tabs */}
+          <View style={styles.filterRow}>
+            {FILTER_PILLS.map((label) => (
+              <TouchableOpacity key={label} activeOpacity={0.85} style={styles.filterPill}>
+                <Text style={styles.filterPillText}>{label}</Text>
+                <Text style={styles.filterCaret}>▾</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        {/* Content */}
-        <View style={styles.content}>
-          {currentView === 'GALLERY' ? (
-            <GalleryView onSelectItem={handleGallerySelect} />
-          ) : null}
-          {currentView === 'CONSTELLATION' ? (
-            <ConstellationView
-              cluster={cluster}
-              constellation={constellation}
-              onPrev={prevConst}
-              onNext={nextConst}
-              onViewStars={handleViewStars}
-              onBack={() => setCurrentView('GALLERY')}
-            />
-          ) : null}
-          {currentView === 'STAR' ? (
-            <StarView
-              clusterName={cluster.name}
-              stars={stars}
-              starIdx={starIdx}
-              onPrev={prevStar}
-              onNext={nextStar}
-              onBack={() => setCurrentView('CONSTELLATION')}
-            />
-          ) : null}
-        </View>
-      </SafeAreaView>
+          {/* Content */}
+          <View style={styles.content}>
+            {currentView === 'GALLERY' ? (
+              <GalleryView onSelectItem={handleGallerySelect} />
+            ) : null}
+            {currentView === 'CONSTELLATION' ? (
+              <ConstellationView
+                cluster={cluster}
+                constellation={constellation}
+                onPrev={prevConst}
+                onNext={nextConst}
+                onViewStars={handleViewStars}
+                onBack={() => setCurrentView('GALLERY')}
+              />
+            ) : null}
+            {currentView === 'STAR' ? (
+              <StarView
+                clusterName={cluster.name}
+                stars={stars}
+                starIdx={starIdx}
+                onPrev={prevStar}
+                onNext={nextStar}
+                onBack={() => setCurrentView('CONSTELLATION')}
+              />
+            ) : null}
+          </View>
+        </SafeAreaView>
 
-      <BottomNavigationBar activeTab="galaxy" />
-    </View>
+        <BottomNavigationBar activeTab="galaxy" />
+      </ResponsiveScreen>
+    </StylesProvider>
   );
 }
 
 // ─── Styles ────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const GALAXY_STYLE_DEF = {
   root: {
     flex: 1,
     backgroundColor: COLORS.bgDeep,
@@ -1455,4 +1473,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     zIndex: 1,
   },
-});
+} as const;
+
+const { StylesProvider, useStyles, useScreenStyles } =
+  createResponsiveStylesContext<typeof GALAXY_STYLE_DEF>();

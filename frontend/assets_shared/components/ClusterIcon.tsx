@@ -4,6 +4,7 @@ import {
   ClusterIndex,
   getClusterLabelColor,
 } from '../clusters';
+import { useResponsive } from '../responsive';
 import { FontFamily } from '../typography';
 import { ClusterPngIcon } from '../stars_png';
 
@@ -12,16 +13,14 @@ export interface ClusterIconProps {
   cluster: ClusterIndex;
   /** 아이콘 아래 표시할 라벨 */
   label: string;
+  /** 디자인 px — 기본 52 */
   iconSize?: number;
   onPress?: () => void;
   style?: ViewStyle;
   labelStyle?: TextStyle;
 }
 
-/**
- * 성단 아이콘 + 하단 라벨
- * 라벨 색상은 cluster 번호별 고정 (ic_cluster1 #FFAEAE … ic_cluster5 #E4B2FF)
- */
+/** 성단 아이콘 + 하단 라벨 — 크기·폰트 자동 스케일 */
 export function ClusterIcon({
   cluster,
   label,
@@ -30,13 +29,24 @@ export function ClusterIcon({
   style,
   labelStyle,
 }: ClusterIconProps) {
+  const { scale, fontScale } = useResponsive();
   const labelColor = getClusterLabelColor(cluster);
+  const scaledIcon = scale(iconSize);
+  const labelFontSize = fontScale(11);
 
   const content = (
-    <View style={[styles.root, style]}>
-      <ClusterPngIcon cluster={cluster} size={iconSize} />
+    <View style={[styles.root, { gap: scale(4) }, style]}>
+      <ClusterPngIcon cluster={cluster} size={scaledIcon} />
       <Text
-        style={[styles.label, { color: labelColor }, labelStyle]}
+        style={[
+          styles.label,
+          {
+            fontSize: labelFontSize,
+            letterSpacing: -labelFontSize * 0.01,
+            color: labelColor,
+          },
+          labelStyle,
+        ]}
         numberOfLines={1}
       >
         {label}
@@ -58,12 +68,9 @@ export function ClusterIcon({
 const styles = StyleSheet.create({
   root: {
     alignItems: 'center',
-    gap: 4,
   },
   label: {
     fontFamily: FontFamily.regular,
-    fontSize: 11,
-    letterSpacing: -0.11,
     textAlign: 'center',
   },
 });
