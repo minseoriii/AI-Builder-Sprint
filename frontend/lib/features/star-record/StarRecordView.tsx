@@ -559,12 +559,14 @@ function ConfirmScreen({
   tags: initialTags,
   cluster,
   baseText,
+  onCycleCluster,
   onNext,
   onBack,
 }: {
   tags: Tags;
   cluster: string;
   baseText: string;
+  onCycleCluster: () => void;
   onNext: () => void;
   onBack: () => void;
 }) {
@@ -597,11 +599,15 @@ function ConfirmScreen({
           기록을 바탕으로 별의 특징을 분석했어요.
         </Text>
 
-        <View style={styles.clusterBlock}>
+        <TouchableOpacity
+          style={styles.clusterBlock}
+          onPress={onCycleCluster}
+          activeOpacity={0.75}
+        >
           <PurpleStarIcon size={44} />
           <Text style={styles.clusterName}>{cluster}</Text>
           <Text style={styles.clusterHint}>탭하여 성단을 변경할 수 있어요</Text>
-        </View>
+        </TouchableOpacity>
 
         <View style={styles.tagList}>
           {rows.map((r) => {
@@ -730,10 +736,11 @@ export default function StarRecordView() {
   const [baseText, setBaseText] = useState('');
   const [missingTags, setMissingTags] = useState<(keyof Tags)[]>([]);
   const [tags, setTags] = useState<Tags | null>(null);
-  const [cluster] = useState(
-    () => CLUSTER_NAMES[Math.floor(Math.random() * CLUSTER_NAMES.length)],
+  const [clusterIndex, setClusterIndex] = useState(
+    () => Math.floor(Math.random() * CLUSTER_NAMES.length),
   );
   const [starIndex] = useState(() => Math.floor(Math.random() * 12) + 1);
+  const cluster = CLUSTER_NAMES[clusterIndex];
 
   useEffect(() => {
     if (screen !== 'loading') return;
@@ -760,6 +767,10 @@ export default function StarRecordView() {
     const parsed = parseTags(baseText, text, missingTags);
     setTags(parsed);
     setScreen('confirm');
+  };
+
+  const handleCycleCluster = () => {
+    setClusterIndex((i) => (i + 1) % CLUSTER_NAMES.length);
   };
 
   const handleConfirmNext = () => {
@@ -797,6 +808,7 @@ export default function StarRecordView() {
               tags={tags}
               cluster={cluster}
               baseText={baseText}
+              onCycleCluster={handleCycleCluster}
               onNext={handleConfirmNext}
               onBack={() => setScreen(missingTags.length > 0 ? 'supplement' : 'base')}
             />
