@@ -2,6 +2,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Animated,
   Easing,
   Image,
@@ -32,10 +34,24 @@ import {
   scaleDesign,
 } from '@/assets_shared';
 import type { ClusterIndex } from '@/assets_shared';
+import {
+  analyzeDailyRecord,
+  confirmDailyRecord,
+  CONSTELLATION_CATEGORIES,
+  DAILY_RECORD_DIMENSIONS,
+  getHome,
+  sanitizeDailyRecordTags,
+  sanitizeTag,
+  type CategoryRankingItem,
+  type DailyRecordTags,
+  type MissingQuestion,
+  updateDailyRecordDetails,
+} from '@/lib/api/daily-records';
+import { getOnboardingStatus } from '@/lib/api/onboarding';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
-type Screen = 'base' | 'supplement' | 'confirm' | 'complete';
+type Screen = 'base' | 'loading' | 'supplement' | 'confirm' | 'complete';
 
 interface Tags {
   together: string;
@@ -48,8 +64,7 @@ interface Tags {
 interface TagMeta {
   key: keyof Tags;
   label: string;
-  icon: string;
-  question: string;
+  dimension: (typeof DAILY_RECORD_DIMENSIONS)[number];
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────
@@ -65,19 +80,54 @@ const COLORS = {
   white: '#FFFFFF',
 };
 
-const REQUIRED_TAGS: TagMeta[] = [
-  { key: 'together', label: '함께한 사람', icon: '👤', question: '누구와 함께한 기록인가요?' },
-  { key: 'place', label: '장소', icon: '📍', question: '어디에서 일어난 일인가요?' },
-  { key: 'time', label: '시간', icon: '🕐', question: '언제 일어난 일인가요?' },
-  { key: 'activity', label: '활동', icon: '🚶', question: '어떤 활동을 했나요?' },
-  { key: 'emotion', label: '감정', icon: '💜', question: '그때 감정은 어땠나요?' },
+const TAG_META: TagMeta[] = [
+  { key: 'together', label: '함께한 사람', dimension: 'PERSON' },
+  { key: 'place', label: '장소', dimension: 'PLACE' },
+  { key: 'time', label: '시간', dimension: 'TIME' },
+  { key: 'activity', label: '활동', dimension: 'ACTIVITY' },
+  { key: 'emotion', label: '감정', dimension: 'EMOTION' },
 ];
 
-const CLUSTER_NAMES = ['일상', '관계·사랑', '성장·도전', '휴식·여유', '특별한 순간'] as const;
+/** 온보딩 선택 성단 순서(1~5) → ic_cluster1~5 1:1 매핑 */
+function userClusterToIconIndex(
+  category: string,
+  userClusters: string[],
+): ClusterIndex {
+  const index = userClusters.indexOf(category);
+  return (((index >= 0 ? index : 0) % 5) + 1) as ClusterIndex;
+}
 
-/** 0-based 배열 인덱스 → 1-based ClusterIndex (ic_cluster1~5) */
-function toClusterId(index0: number): ClusterIndex {
-  return ((index0 % CLUSTER_NAMES.length) + 1) as ClusterIndex;
+/** 온보딩 선택 성단 목록 안에서만 순환 */
+function nextUserCluster(current: string, userClusters: string[]): string {
+  if (userClusters.length === 0) return current;
+  const index = userClusters.indexOf(current);
+  const next = (index >= 0 ? index + 1 : 0) % userClusters.length;
+  return userClusters[next];
+}
+
+/**
+ * AI 추천 주 성단을 온보딩 선택 목록에 맞춰 초기값으로 해석.
+ * 1) AI primary가 선택 목록에 있으면 그대로
+ * 2) ranking 중 선택 목록에 있는 첫 항목
+ * 3) 선택 목록 첫 성단
+ */
+function resolveInitialUserCluster(
+  aiPrimary: string,
+  ranking: CategoryRankingItem[],
+  userClusters: string[],
+): string {
+  if (userClusters.length === 0) {
+    return aiPrimary || CONSTELLATION_CATEGORIES[0];
+  }
+  if (userClusters.includes(aiPrimary)) {
+    return aiPrimary;
+  }
+  for (const item of ranking) {
+    if (userClusters.includes(item.category)) {
+      return item.category;
+    }
+  }
+  return userClusters[0];
 }
 
 const TAG_ICON_SOURCES: Record<keyof Tags, number> = {
@@ -105,48 +155,75 @@ function getSeasonGalaxy(): string {
   return '겨울';
 }
 
-function detectMissingTags(text: string): (keyof Tags)[] {
-  const missing: (keyof Tags)[] = [];
-  const t = text;
-  if (!/(친구|가족|동기|선배|후배|혼자|혼자서|동료|누구|함께|같이)/.test(t)) missing.push('together');
-  if (!/(에서|에서의|카페|집|학교|공원|식당|도서관|어디|장소|곳)/.test(t)) missing.push('place');
-  if (!/(아침|점심|저녁|밤|새벽|오전|오후|언제|시간)/.test(t)) missing.push('time');
-  if (!/(먹|마시|갔|했|봤|만났|걸었|달렸|공부|일|놀|쉬)/.test(t)) missing.push('activity');
-  if (!/(좋았|행복|슬프|기뻤|설렜|외로|피곤|시원|따뜻|즐거|감사|뿌듯|화가|속상)/.test(t)) {
-    missing.push('emotion');
-  }
-  return missing;
+function splitTagValues(raw: string): string[] {
+  const parts = raw
+    .split(/[,，、\n]/)
+    .map((part) => sanitizeTag(part))
+    .filter((part) => part.length > 0);
+  return parts;
 }
 
-function parseTags(baseText: string, supplementText: string, _missing: (keyof Tags)[]): Tags {
-  const tags: Tags = {
-    together: '대학 동기',
-    place: '부산대학교 넉넉한 터',
-    time: '늦은 밤',
-    activity: '캔맥주를 마심',
-    emotion: '시원함',
+function apiTagsToUi(tags: DailyRecordTags): Tags {
+  const clean = sanitizeDailyRecordTags(tags);
+  return {
+    together: (clean.PERSON ?? []).join(', '),
+    place: (clean.PLACE ?? []).join(', '),
+    time: (clean.TIME ?? []).join(', '),
+    activity: (clean.ACTIVITY ?? []).join(', '),
+    emotion: (clean.EMOTION ?? []).join(', '),
+  };
+}
+
+function uiTagsToApi(tags: Tags): DailyRecordTags {
+  const toValues = (value: string): string[] => {
+    const parts = splitTagValues(value).slice(0, 5);
+    return parts.length > 0 ? parts : ['미입력'];
+  };
+  return sanitizeDailyRecordTags({
+    PERSON: toValues(tags.together),
+    PLACE: toValues(tags.place),
+    ACTIVITY: toValues(tags.activity),
+    TIME: toValues(tags.time),
+    EMOTION: toValues(tags.emotion),
+  });
+}
+
+/** 보완 답변을 비어 있는 차원에 반영 */
+function mergeSupplementAnswer(
+  tags: DailyRecordTags,
+  missingQuestions: MissingQuestion[],
+  answer: string,
+): DailyRecordTags {
+  const trimmed = sanitizeTag(answer);
+  const base = sanitizeDailyRecordTags(tags);
+  const next: DailyRecordTags = {
+    PERSON: [...(base.PERSON ?? [])],
+    PLACE: [...(base.PLACE ?? [])],
+    ACTIVITY: [...(base.ACTIVITY ?? [])],
+    TIME: [...(base.TIME ?? [])],
+    EMOTION: [...(base.EMOTION ?? [])],
   };
 
-  const combined = `${baseText} ${supplementText}`;
+  for (const question of missingQuestions) {
+    if ((next[question.dimension] ?? []).length === 0 && trimmed) {
+      next[question.dimension] = [trimmed];
+    }
+  }
 
-  const togetherMatch = combined.match(
-    /(혼자|친구|가족|동기|선배|후배|동료|[가-힣]+(이)?와|[가-힣]+(랑)|[가-힣]+ 친구)/,
+  for (const dimension of DAILY_RECORD_DIMENSIONS) {
+    if ((next[dimension] ?? []).length === 0) {
+      next[dimension] = [trimmed || '미입력'];
+    }
+  }
+
+  return sanitizeDailyRecordTags(next);
+}
+
+function showProcessError() {
+  Alert.alert(
+    '알림',
+    'AI 분석 응답이 지연되었습니다. 잠시 후 다시 시도해 주세요.',
   );
-  if (togetherMatch) tags.together = togetherMatch[0];
-
-  const placeMatch = combined.match(/(카페|집|학교|공원|식당|도서관|편의점|[가-힣]+(에서))/);
-  if (placeMatch) tags.place = placeMatch[0].replace('에서', '');
-
-  const timeMatch = combined.match(/(아침|점심|저녁|밤|새벽|오전|오후)/);
-  if (timeMatch) tags.time = timeMatch[0];
-
-  const activityMatch = combined.match(/(먹었|마셨|갔다|했다|봤다|만났다|걸었다|공부했|일했|놀았|쉬었)/);
-  if (activityMatch) tags.activity = activityMatch[0].replace('다', '');
-
-  const emotionMatch = combined.match(/(좋았|행복|슬프|기뻤|설렜|외로|피곤|시원|따뜻|즐거|감사|뿌듯)/);
-  if (emotionMatch) tags.emotion = emotionMatch[0];
-
-  return tags;
 }
 
 // ─── Icons ─────────────────────────────────────────────────────────────────
@@ -463,20 +540,21 @@ function BaseScreen({
 const SUPPLEMENT_BLOCK_GAP = (ScreenLayout.textAreaY - ScreenLayout.subtitleY) / 2; // 35
 
 function SupplementScreen({
-  missingTags,
+  missingQuestions,
   onNext,
   onBack,
+  submitting,
 }: {
-  missingTags: (keyof Tags)[];
+  missingQuestions: MissingQuestion[];
   onNext: (text: string) => void;
   onBack: () => void;
+  submitting?: boolean;
 }) {
   const { width, height } = useWindowDimensions();
   const { x, y } = scaleDesign(width, height);
   const [text, setText] = useState('');
   const [titleBottom, setTitleBottom] = useState(0);
   const [questionsBottom, setQuestionsBottom] = useState(0);
-  const questions = REQUIRED_TAGS.filter((t) => missingTags.includes(t.key));
 
   const blockGap = y(SUPPLEMENT_BLOCK_GAP);
   const titleTop = y(ScreenLayout.titleY);
@@ -524,8 +602,8 @@ function SupplementScreen({
           setQuestionsBottom(layoutY + layoutH);
         }}
       >
-        {questions.map((q) => (
-          <AppText key={q.key} style={styles.supplementQuestion}>
+        {missingQuestions.map((q) => (
+          <AppText key={q.dimension} style={styles.supplementQuestion}>
             {q.question}
           </AppText>
         ))}
@@ -538,6 +616,7 @@ function SupplementScreen({
         placeholderTextColor="rgba(248,238,193,0.6)"
         multiline
         textAlignVertical="top"
+        editable={!submitting}
         style={[
           styles.textArea,
           {
@@ -550,7 +629,12 @@ function SupplementScreen({
         ]}
       />
 
-      <PrimaryButton label="확인" pinnedToLargeTop onPress={() => onNext(text)} />
+      <PrimaryButton
+        label="확인"
+        pinnedToLargeTop
+        disabled={submitting || text.trim().length === 0}
+        onPress={() => onNext(text)}
+      />
     </View>
   );
 }
@@ -627,26 +711,25 @@ function ConfirmScreen({
   onCycleCluster,
   onNext,
   onBack,
+  submitting,
 }: {
   tags: Tags;
   cluster: string;
   clusterId: ClusterIndex;
   onCycleCluster: () => void;
-  onNext: () => void;
+  onNext: (tags: Tags) => void;
   onBack: () => void;
+  submitting?: boolean;
 }) {
   const { width, height } = useWindowDimensions();
   const { y } = scaleDesign(width, height);
   const [tags, setTags] = useState<Tags>(initialTags);
   const [editingKey, setEditingKey] = useState<keyof Tags | null>(null);
 
-  const rows: { key: keyof Tags; label: string }[] = [
-    { key: 'together', label: '함께한 사람' },
-    { key: 'place', label: '장소' },
-    { key: 'time', label: '시간' },
-    { key: 'activity', label: '활동' },
-    { key: 'emotion', label: '감정' },
-  ];
+  const rows: { key: keyof Tags; label: string }[] = TAG_META.map((meta) => ({
+    key: meta.key,
+    label: meta.label,
+  }));
 
   const editingRow = rows.find((r) => r.key === editingKey);
 
@@ -671,6 +754,7 @@ function ConfirmScreen({
           style={styles.clusterBlock}
           onPress={onCycleCluster}
           activeOpacity={0.75}
+          disabled={submitting}
         >
           <ClusterIcon cluster={clusterId} label={cluster} iconSize={52} />
           <AppText style={styles.clusterHint}>탭하여 성단을 변경할 수 있어요</AppText>
@@ -701,6 +785,7 @@ function ConfirmScreen({
                   style={styles.editBtn}
                   hitSlop={8}
                   activeOpacity={0.7}
+                  disabled={submitting}
                 >
                   <Image source={PEN_ICON} style={styles.penIcon} resizeMode="contain" />
                 </TouchableOpacity>
@@ -713,7 +798,12 @@ function ConfirmScreen({
         <View style={{ height: y(ScreenLayout.largeButtonHeight) + y(40) }} />
       </ScrollView>
 
-      <PrimaryButton label="별 생성하기" pinnedToLargeTop onPress={onNext} />
+      <PrimaryButton
+        label="별 생성하기"
+        pinnedToLargeTop
+        disabled={submitting}
+        onPress={() => onNext(tags)}
+      />
 
       {editingRow && editingKey && (
         <TagEditModal
@@ -737,7 +827,7 @@ function CompleteScreen({
 }: {
   cluster: string;
   starIndex: number;
-  onHome: () => void;
+  onHome: () => void | Promise<void>;
 }) {
   const now = new Date();
   const year = now.getFullYear();
@@ -798,50 +888,197 @@ function CompleteScreen({
 
 // ─── Main View ─────────────────────────────────────────────────────────────
 
+// ─── Loading ───────────────────────────────────────────────────────────────
+
+function LoadingScreen({ message }: { message: string }) {
+  return (
+    <View style={styles.loadingCenter}>
+      <ActivityIndicator color="#FFF9DD" size="large" />
+      <AppText style={styles.loadingText}>{message}</AppText>
+    </View>
+  );
+}
+
+// ─── Main View ─────────────────────────────────────────────────────────────
+
 export default function StarRecordView() {
   const router = useRouter();
   const { width, height } = useWindowDimensions();
   const [screen, setScreen] = useState<Screen>('base');
-  const [baseText, setBaseText] = useState('');
-  const [missingTags, setMissingTags] = useState<(keyof Tags)[]>([]);
-  const [tags, setTags] = useState<Tags | null>(null);
-  const [clusterIndex0, setClusterIndex0] = useState(
-    () => Math.floor(Math.random() * CLUSTER_NAMES.length),
-  );
-  const [starIndex] = useState(() => Math.floor(Math.random() * 12) + 1);
-  const clusterId = toClusterId(clusterIndex0);
-  const cluster = CLUSTER_NAMES[clusterIndex0];
+  const [loadingMessage, setLoadingMessage] = useState('빛의 속도로 분석하는 중...');
+  const [analysisId, setAnalysisId] = useState<string | null>(null);
+  const [apiTags, setApiTags] = useState<DailyRecordTags | null>(null);
+  const [missingQuestions, setMissingQuestions] = useState<MissingQuestion[]>([]);
+  /** 온보딩에서 선택한 성단 이름 목록 (선택 순서 = 성단 1~5) */
+  const [userClusters, setUserClusters] = useState<string[]>([]);
+  const [primaryCategory, setPrimaryCategory] = useState<string>('');
+  const [starIndex, setStarIndex] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleBaseNext = (text: string) => {
-    setBaseText(text);
-    const missing = detectMissingTags(text);
-    if (missing.length > 0) {
-      setMissingTags(missing);
-      setScreen('supplement');
-    } else {
-      setMissingTags([]);
-      const parsed = parseTags(text, '', missing);
-      setTags(parsed);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const status = await getOnboardingStatus();
+        const categories = status.north_star?.selected_categories ?? [];
+        if (!cancelled && categories.length > 0) {
+          setUserClusters(categories);
+          setPrimaryCategory((prev) => prev || categories[0]);
+        }
+      } catch (error) {
+        console.error('Onboarding clusters load error:', error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const clusterId = userClusterToIconIndex(primaryCategory, userClusters);
+  const uiTags = apiTags ? apiTagsToUi(apiTags) : null;
+
+  const goToConfirmWithDetails = async (
+    id: string,
+    tags: DailyRecordTags,
+    clusters: string[] = userClusters,
+  ): Promise<boolean> => {
+    setLoadingMessage('별의 특징을 정리하는 중...');
+    setScreen('loading');
+    try {
+      const details = await updateDailyRecordDetails(id, tags);
+      setApiTags(sanitizeDailyRecordTags(details.tags));
+      setPrimaryCategory(
+        resolveInitialUserCluster(
+          details.primary_category,
+          details.category_ranking ?? [],
+          clusters,
+        ),
+      );
       setScreen('confirm');
+      return true;
+    } catch (error) {
+      console.error('Daily record details error:', error);
+      showProcessError();
+      return false;
     }
   };
 
-  const handleSupplementNext = (text: string) => {
-    const parsed = parseTags(baseText, text, missingTags);
-    setTags(parsed);
-    setScreen('confirm');
+  const handleBaseNext = async (text: string) => {
+    if (submitting) return;
+    setSubmitting(true);
+    setLoadingMessage('빛의 속도로 분석하는 중...');
+    setScreen('loading');
+    try {
+      // 온보딩 선택 성단이 아직 없으면 한 번 더 로드
+      let clusters = userClusters;
+      if (clusters.length === 0) {
+        try {
+          const status = await getOnboardingStatus();
+          clusters = status.north_star?.selected_categories ?? [];
+          if (clusters.length > 0) setUserClusters(clusters);
+        } catch (error) {
+          console.error('Onboarding clusters load error:', error);
+        }
+      }
+
+      const data = await analyzeDailyRecord(text);
+      const cleanedTags = sanitizeDailyRecordTags(data.tags);
+      setAnalysisId(data.analysis_id);
+      setApiTags(cleanedTags);
+      setMissingQuestions(data.missing_questions ?? []);
+
+      if ((data.missing_questions ?? []).length > 0) {
+        setScreen('supplement');
+        return;
+      }
+
+      const ok = await goToConfirmWithDetails(
+        data.analysis_id,
+        cleanedTags,
+        clusters,
+      );
+      if (!ok) setScreen('base');
+    } catch (error) {
+      console.error('Daily record analyze error:', error);
+      showProcessError();
+      setScreen('base');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSupplementNext = async (answer: string) => {
+    if (!analysisId || !apiTags || submitting) return;
+    if (answer.trim().length === 0) {
+      Alert.alert('알림', '내용을 입력해주세요.');
+      return;
+    }
+
+    setSubmitting(true);
+    const merged = mergeSupplementAnswer(apiTags, missingQuestions, answer);
+    setApiTags(merged);
+    const ok = await goToConfirmWithDetails(analysisId, merged, userClusters);
+    if (!ok) setScreen('supplement');
+    setSubmitting(false);
   };
 
   const handleCycleCluster = () => {
-    setClusterIndex0((i) => (i + 1) % CLUSTER_NAMES.length);
+    setPrimaryCategory((prev) => nextUserCluster(prev, userClusters));
   };
 
-  const handleConfirmNext = () => {
-    setScreen('complete');
+  const handleConfirmNext = async (editedTags: Tags) => {
+    if (!analysisId || submitting) return;
+    setSubmitting(true);
+    setLoadingMessage('별을 생성하는 중...');
+    setScreen('loading');
+
+    try {
+      const tagsPayload = uiTagsToApi(editedTags);
+      const details = await updateDailyRecordDetails(analysisId, tagsPayload);
+      setApiTags(sanitizeDailyRecordTags(details.tags));
+
+      // 사용자가 순환 선택한 성단 이름 → confirm primary_category
+      const selectedCategory =
+        (userClusters.includes(primaryCategory)
+          ? primaryCategory
+          : resolveInitialUserCluster(
+              details.primary_category,
+              details.category_ranking ?? [],
+              userClusters,
+            )) || details.primary_category;
+
+      await confirmDailyRecord(analysisId, selectedCategory);
+      setPrimaryCategory(selectedCategory);
+
+      try {
+        const home = await getHome();
+        const constellation = home.constellations.find(
+          (item) => item.category === selectedCategory,
+        );
+        setStarIndex(constellation?.star_count ?? 1);
+      } catch (homeError) {
+        console.error('Home sync error:', homeError);
+        setStarIndex(1);
+      }
+
+      setScreen('complete');
+    } catch (error) {
+      console.error('Daily record confirm error:', error);
+      showProcessError();
+      setScreen('confirm');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleHome = () => {
-    router.replace('/');
+  const handleHome = async () => {
+    try {
+      await getHome();
+    } catch (error) {
+      console.error('Home refetch error:', error);
+    } finally {
+      router.replace('/');
+    }
   };
 
   return (
@@ -856,26 +1093,32 @@ export default function StarRecordView() {
           {screen === 'base' && (
             <BaseScreen onNext={handleBaseNext} onBack={() => router.back()} />
           )}
+          {screen === 'loading' && <LoadingScreen message={loadingMessage} />}
           {screen === 'supplement' && (
             <SupplementScreen
-              missingTags={missingTags}
+              missingQuestions={missingQuestions}
               onNext={handleSupplementNext}
               onBack={() => setScreen('base')}
+              submitting={submitting}
             />
           )}
-          {screen === 'confirm' && tags && (
+          {screen === 'confirm' && uiTags && (
             <ConfirmScreen
-              tags={tags}
-              cluster={cluster}
+              key={analysisId ?? 'confirm'}
+              tags={uiTags}
+              cluster={primaryCategory}
               clusterId={clusterId}
               onCycleCluster={handleCycleCluster}
               onNext={handleConfirmNext}
-              onBack={() => setScreen(missingTags.length > 0 ? 'supplement' : 'base')}
+              onBack={() =>
+                setScreen(missingQuestions.length > 0 ? 'supplement' : 'base')
+              }
+              submitting={submitting}
             />
           )}
           {screen === 'complete' && (
             <CompleteScreen
-              cluster={cluster}
+              cluster={primaryCategory}
               starIndex={starIndex}
               onHome={handleHome}
             />
@@ -898,6 +1141,19 @@ const styles = StyleSheet.create({
   },
   flexFill: {
     flex: 1,
+  },
+  loadingCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    paddingHorizontal: 24,
+  },
+  loadingText: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    color: 'rgba(255,249,221,0.85)',
+    textAlign: 'center',
   },
 
   // ─ Shared header (STATE 1 / STATE 2) ─
