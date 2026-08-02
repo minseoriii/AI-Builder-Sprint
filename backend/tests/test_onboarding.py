@@ -277,15 +277,27 @@ def test_profile_idempotent(db_session):
     assert count == 1
 
 
-def test_north_star_locked_same_season(client, db_session, mock_ai):
+def test_north_star_onboarding_save_allowed_same_season(client, db_session, mock_ai):
+    """온보딩 PUT은 같은 계절에도 재확정 가능. 잠금은 editability(홈 수정)용."""
     _save_north_star(client)
 
-    response = client.post(
+    analyze = client.post(
         "/api/v1/onboarding/north-star/analyze",
         json={"text": "새로운 북극성 문장입니다."},
     )
-    assert response.status_code == 422
-    assert response.json()["detail"]["code"] == "NORTH_STAR_SEASON_LOCKED"
+    assert analyze.status_code == 200
+    analysis_id = analyze.json()["analysis_id"]
+
+    response = client.put(
+        "/api/v1/onboarding/north-star",
+        json={
+            "analysis_id": analysis_id,
+            "selected_categories": VALID_FIVE_SELECTION,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["onboarding_completed"] is True
+    assert response.json()["north_star"]["text"] == "새로운 북극성 문장입니다."
 
 
 def test_onboarding_status_shows_lock_after_save(client, db_session, mock_ai):

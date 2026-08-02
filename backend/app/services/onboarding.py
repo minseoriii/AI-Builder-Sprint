@@ -9,7 +9,6 @@ from app.core.exceptions import (
     AnalysisExpiredError,
     AnalysisNotFoundError,
     InvalidSelectionError,
-    NorthStarSeasonLockedError,
 )
 from app.models.north_star import NorthStar
 from app.models.north_star_analysis import NorthStarAnalysis
@@ -26,7 +25,7 @@ from app.services.north_star_analysis import (
     analyze_north_star_constellations,
     get_north_star_analysis_prompt_version,
 )
-from app.services.season import get_north_star_editability, is_north_star_editable
+from app.services.season import get_north_star_editability
 from app.services.upstage import UpstageClient
 
 
@@ -39,23 +38,6 @@ def _get_active_north_star(db: Session, user_id: uuid.UUID) -> NorthStar | None:
         db.query(NorthStar)
         .filter(NorthStar.user_id == user_id, NorthStar.is_active.is_(True))
         .one_or_none()
-    )
-
-
-def _ensure_north_star_editable_for_update(db: Session, user_id: uuid.UUID) -> None:
-    profile = get_or_create_user_profile(db, user_id)
-    if not profile.onboarding_completed:
-        return
-
-    north_star = _get_active_north_star(db, user_id)
-    if north_star is None or is_north_star_editable(north_star):
-        return
-
-    editability = get_north_star_editability(north_star)
-    raise NorthStarSeasonLockedError(
-        editable_from=editability["editable_from"].isoformat(),
-        locked_season_year=editability["locked_season_year"],
-        locked_season_label=editability["locked_season_label"],
     )
 
 
@@ -97,7 +79,7 @@ def create_north_star_analysis(
     client: UpstageClient,
 ) -> NorthStarAnalyzeResponse:
     get_or_create_user_profile(db, user_id)
-    _ensure_north_star_editable_for_update(db, user_id)
+    # analyze는 온보딩 진행·문장 재작성 단계용 — 계절 잠금 없음
     ai_result = analyze_north_star_constellations(text, client)
 
     now = datetime.now(UTC)
@@ -150,7 +132,7 @@ def save_north_star_selection(
     selected_categories: list[str],
 ) -> OnboardingStatusResponse:
     analysis = _get_valid_analysis(db, user_id, analysis_id)
-    _ensure_north_star_editable_for_update(db, user_id)
+    # 온보딩 확정(PUT)은 계절 잠금 대상 아님 — 홈에서의 수정 가능 여부는 editability로 안내
     candidate_map = {item["category"]: item for item in analysis.candidates}
 
     for category in selected_categories:
