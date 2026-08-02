@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  BackHandler,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -10,14 +12,21 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Ellipse, Line, Path } from 'react-native-svg';
 
-// ─── Types ─────────────────────────────────────────────────────────────────
+import {
+  AppConfirmModal,
+  BottomNavigationBar,
+  ResponsiveScreen,
+  createResponsiveStylesContext,
+  useResponsive,
+} from '@/assets_shared';
 
-type Tab = 'galaxy' | 'observatory' | 'home' | 'comet' | 'mypage';
+// ─── Types ─────────────────────────────────────────────────────────────────
 
 interface Cluster {
   id: string;
@@ -32,14 +41,6 @@ const CLUSTERS: Cluster[] = [
   { id: 'c3', label: '관계·사랑' },
   { id: 'c4', label: '모험·도전' },
   { id: 'c5', label: '건강' },
-];
-
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'galaxy', label: '은하감상' },
-  { id: 'observatory', label: '천문연구소' },
-  { id: 'home', label: '홈' },
-  { id: 'comet', label: '혜성관측소' },
-  { id: 'mypage', label: '마이페이지' },
 ];
 
 // ─── Helper: Date ──────────────────────────────────────────────────────────
@@ -106,63 +107,6 @@ function CreateStarIcon() {
   );
 }
 
-function TabIcon({ id, color }: { id: Tab; color: string }) {
-  switch (id) {
-    case 'galaxy':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-          <Circle cx="12" cy="12" r="10" stroke={color} strokeWidth={1.5} />
-          <Ellipse cx="12" cy="12" rx="4" ry="10" stroke={color} strokeWidth={1.5} />
-          <Line x1="2" y1="12" x2="22" y2="12" stroke={color} strokeWidth={1.5} />
-        </Svg>
-      );
-    case 'observatory':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-          <Path
-            d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"
-            stroke={color}
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </Svg>
-      );
-    case 'home':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 24 24" fill={color}>
-          <Path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
-        </Svg>
-      );
-    case 'comet':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-          <Circle cx="12" cy="12" r="3" stroke={color} strokeWidth={1.5} />
-          <Path
-            d="M12 2v2M12 20v2M2 12h2M20 12h2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
-            stroke={color}
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </Svg>
-      );
-    case 'mypage':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-          <Path
-            d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
-            stroke={color}
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <Circle cx="12" cy="7" r="4" stroke={color} strokeWidth={1.5} />
-        </Svg>
-      );
-  }
-}
-
 // ─── Twinkle animation helper ──────────────────────────────────────────────
 
 function useTwinkle(delayMs: number, durationMs: number) {
@@ -212,13 +156,15 @@ function ClusterItem({
   onSelect: () => void;
   selected: boolean;
 }) {
+  const styles = useStyles();
+  const r = useResponsive();
   const angleDeg = -90 + (360 / total) * index;
   const angleRad = (angleDeg * Math.PI) / 180;
   const x = centerX + radius * Math.cos(angleRad);
   const y = centerY + radius * Math.sin(angleRad);
   const twinkleOpacity = useTwinkle(index * 480, 2400);
-  const itemHalfW = 40;
-  const itemHalfH = 28;
+  const itemHalfW = r.scale(40);
+  const itemHalfH = r.scale(28);
 
   return (
     <TouchableOpacity
@@ -287,6 +233,7 @@ function BgStar({
   screenW: number;
   screenH: number;
 }) {
+  const styles = useStyles();
   const opacity = useTwinkle(d * 1000, (2 + d) * 1000);
 
   return (
@@ -321,11 +268,13 @@ function BackgroundStars() {
 // ─── Polaris Modal ──────────────────────────────────────────────────────────
 
 function PolarisModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const styles = useStyles();
+
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="none"
       onRequestClose={onClose}
       statusBarTranslucent
     >
@@ -365,18 +314,48 @@ export default function Index() {
 }
 
 function HomeScreen() {
+  const styles = useScreenStyles(HOME_STYLE_DEF);
   const router = useRouter();
-  const { width: screenW } = useWindowDimensions();
-  const [activeTab, setActiveTab] = useState<Tab>('home');
+  const r = useResponsive();
   const [modalOpen, setModalOpen] = useState(false);
+  const [exitModalOpen, setExitModalOpen] = useState(false);
   const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
   const { year, month, day, weekday, season } = getDateInfo();
   const polarisOpacity = useTwinkle(0, 2400);
 
-  // Responsive orbit: scale for narrow phones, cap for large screens
-  const maxContentW = Math.min(screenW, 430);
-  const ORBIT_R = Math.max(88, Math.min(118, maxContentW * 0.3));
-  const ORBIT_PAD = Math.max(52, Math.min(64, maxContentW * 0.15));
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'android') return;
+
+      const onBackPress = () => {
+        if (exitModalOpen) {
+          setExitModalOpen(false);
+          return true;
+        }
+        if (modalOpen) {
+          setModalOpen(false);
+          return true;
+        }
+        setExitModalOpen(true);
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener(
+        'hardwareBackPress',
+        onBackPress,
+      );
+      return () => subscription.remove();
+    }, [exitModalOpen, modalOpen]),
+  );
+
+  const handleExitApp = () => {
+    setExitModalOpen(false);
+    BackHandler.exitApp();
+  };
+
+  const maxContentW = r.width;
+  const ORBIT_R = Math.max(r.scale(88), Math.min(r.scale(118), maxContentW * 0.3));
+  const ORBIT_PAD = Math.max(r.scale(52), Math.min(r.scale(64), maxContentW * 0.15));
   const orbitSize = (ORBIT_R + ORBIT_PAD) * 2;
   const center = ORBIT_R + ORBIT_PAD;
 
@@ -384,176 +363,143 @@ function HomeScreen() {
     router.push('/star-record');
   };
 
-  const handleTabPress = (tabId: Tab) => {
-    if (tabId === 'galaxy') {
-      router.push('/galaxy-view');
-      return;
-    }
-    if (tabId === 'observatory') {
-      router.push('/observatory');
-      return;
-    }
-    if (tabId === 'home') {
-      setActiveTab('home');
-      return;
-    }
-    setActiveTab(tabId);
-  };
-
   return (
-    <View style={styles.root}>
-      <StatusBar style="light" />
-      <LinearGradient
-        colors={['#0d1f48', '#081432', '#060e28']}
-        locations={[0, 0.45, 1]}
-        style={styles.screen}
-      >
-        <BackgroundStars />
+    <StylesProvider styles={styles}>
+      <ResponsiveScreen style={{ backgroundColor: '#06101f' }}>
+        <StatusBar style="light" />
+        <LinearGradient
+          colors={['#0d1f48', '#081432', '#060e28']}
+          locations={[0, 0.45, 1]}
+          style={styles.screen}
+        >
+          <BackgroundStars />
 
-        <SafeAreaView style={styles.safe} edges={['top']}>
-          {/* Dev: open onboarding flow */}
-          <TouchableOpacity
-            style={styles.onboardingTestBtn}
-            onPress={() => router.push('/onboarding')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.onboardingTestBtnText}>온보딩 테스트</Text>
-          </TouchableOpacity>
+          <SafeAreaView style={styles.safe} edges={['top']}>
+            {/* Dev: open onboarding flow */}
+            <TouchableOpacity
+              style={styles.onboardingTestBtn}
+              onPress={() => router.push('/onboarding')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.onboardingTestBtnText}>온보딩 테스트</Text>
+            </TouchableOpacity>
 
-          {/* ── Header ──────────────────────────────────────────────── */}
-          <View style={styles.header}>
-            <Text style={styles.title}>
-              {year}년 {season}의 은하
-            </Text>
-            <Text style={styles.subtitle}>
-              {year}년 {month}월 {day}일 {weekday}요일
-            </Text>
-          </View>
+            {/* ── Header ──────────────────────────────────────────────── */}
+            <View style={styles.header}>
+              <Text style={styles.title}>
+                {year}년 {season}의 은하
+              </Text>
+              <Text style={styles.subtitle}>
+                {year}년 {month}월 {day}일 {weekday}요일
+              </Text>
+            </View>
 
-          {/* ── Galaxy View ─────────────────────────────────────────── */}
-          <View style={styles.main}>
-            <View style={[styles.orbitArea, { width: orbitSize, height: orbitSize }]}>
-              {/* Outer orbit ring */}
-              <View
-                style={[
-                  styles.orbitRingOuter,
-                  {
-                    width: ORBIT_R * 2 + 8,
-                    height: ORBIT_R * 2 + 8,
-                    borderRadius: ORBIT_R + 4,
-                  },
-                ]}
-              />
-              {/* Inner orbit ring */}
-              <View
-                style={[
-                  styles.orbitRingInner,
-                  {
-                    width: ORBIT_R * 0.55 * 2,
-                    height: ORBIT_R * 0.55 * 2,
-                    borderRadius: ORBIT_R * 0.55,
-                  },
-                ]}
-              />
-
-              {CLUSTERS.map((c, i) => (
-                <ClusterItem
-                  key={c.id}
-                  label={c.label}
-                  index={i}
-                  total={CLUSTERS.length}
-                  radius={ORBIT_R}
-                  centerX={center}
-                  centerY={center}
-                  onSelect={() =>
-                    setSelectedCluster((prev) => (prev === c.id ? null : c.id))
-                  }
-                  selected={selectedCluster === c.id}
+            {/* ── Galaxy View ─────────────────────────────────────────── */}
+            <View style={styles.main}>
+              <View style={[styles.orbitArea, { width: orbitSize, height: orbitSize }]}>
+                {/* Outer orbit ring */}
+                <View
+                  style={[
+                    styles.orbitRingOuter,
+                    {
+                      width: ORBIT_R * 2 + 8,
+                      height: ORBIT_R * 2 + 8,
+                      borderRadius: ORBIT_R + 4,
+                    },
+                  ]}
                 />
-              ))}
+                {/* Inner orbit ring */}
+                <View
+                  style={[
+                    styles.orbitRingInner,
+                    {
+                      width: ORBIT_R * 0.55 * 2,
+                      height: ORBIT_R * 0.55 * 2,
+                      borderRadius: ORBIT_R * 0.55,
+                    },
+                  ]}
+                />
 
-              {/* Polaris center button */}
-              <TouchableOpacity
-                onPress={() => setModalOpen(true)}
-                activeOpacity={0.8}
-                style={styles.polarisBtn}
-              >
-                <Animated.View style={{ opacity: polarisOpacity }}>
-                  <StarIcon4 size={52} color="#f5d06a" />
-                </Animated.View>
-                <Text style={styles.polarisLabel}>polaris</Text>
-              </TouchableOpacity>
-            </View>
+                {CLUSTERS.map((c, i) => (
+                  <ClusterItem
+                    key={c.id}
+                    label={c.label}
+                    index={i}
+                    total={CLUSTERS.length}
+                    radius={ORBIT_R}
+                    centerX={center}
+                    centerY={center}
+                    onSelect={() =>
+                      setSelectedCluster((prev) => (prev === c.id ? null : c.id))
+                    }
+                    selected={selectedCluster === c.id}
+                  />
+                ))}
 
-            {/* Value sentence */}
-            <View style={styles.valueRow}>
-              <Text style={styles.valueSpark}>✦</Text>
-              <Text style={styles.valueText}>새로운 시도를 두려워하지 말자.</Text>
-              <Text style={styles.valueSpark}>✦</Text>
-            </View>
-
-            {/* Create Star button */}
-            <View style={styles.createWrap}>
-              <Pressable
-                onPress={handleCreateStar}
-                style={({ pressed }) => [
-                  styles.createBtnOuter,
-                  pressed && styles.createBtnPressed,
-                ]}
-              >
-                <LinearGradient
-                  colors={['#1a3a7a', '#0f2255']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.createBtn}
+                {/* Polaris center button */}
+                <TouchableOpacity
+                  onPress={() => setModalOpen(true)}
+                  activeOpacity={0.8}
+                  style={styles.polarisBtn}
                 >
-                  <CreateStarIcon />
-                </LinearGradient>
-              </Pressable>
-              <Text style={styles.createLabel}>별 생성하기</Text>
-            </View>
-          </View>
+                  <Animated.View style={{ opacity: polarisOpacity }}>
+                    <StarIcon4 size={52} color="#f5d06a" />
+                  </Animated.View>
+                  <Text style={styles.polarisLabel}>polaris</Text>
+                </TouchableOpacity>
+              </View>
 
-          {/* ── Bottom Nav ──────────────────────────────────────────── */}
-          <SafeAreaView edges={['bottom']} style={styles.navSafe}>
-            <View style={styles.nav}>
-              {TABS.map((tab) => {
-                const isActive = tab.id === activeTab;
-                const color = isActive ? '#e8eef8' : 'rgba(122,156,200,0.55)';
-                return (
-                  <TouchableOpacity
-                    key={tab.id}
-                    onPress={() => handleTabPress(tab.id)}
-                    activeOpacity={0.7}
-                    style={[styles.tabBtn, isActive && styles.tabBtnActive]}
+              {/* Value sentence */}
+              <View style={styles.valueRow}>
+                <Text style={styles.valueSpark}>✦</Text>
+                <Text style={styles.valueText}>새로운 시도를 두려워하지 말자.</Text>
+                <Text style={styles.valueSpark}>✦</Text>
+              </View>
+
+              {/* Create Star button */}
+              <View style={styles.createWrap}>
+                <Pressable
+                  onPress={handleCreateStar}
+                  style={({ pressed }) => [
+                    styles.createBtnOuter,
+                    pressed && styles.createBtnPressed,
+                  ]}
+                >
+                  <LinearGradient
+                    colors={['#1a3a7a', '#0f2255']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.createBtn}
                   >
-                    <TabIcon id={tab.id} color={color} />
-                    <Text
-                      style={[styles.tabLabel, isActive && styles.tabLabelActive]}
-                      numberOfLines={1}
-                    >
-                      {tab.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+                    <CreateStarIcon />
+                  </LinearGradient>
+                </Pressable>
+                <Text style={styles.createLabel}>별 생성하기</Text>
+              </View>
             </View>
-          </SafeAreaView>
-        </SafeAreaView>
 
-        <PolarisModal visible={modalOpen} onClose={() => setModalOpen(false)} />
-      </LinearGradient>
-    </View>
+          </SafeAreaView>
+
+          <BottomNavigationBar activeTab="home" />
+          <PolarisModal visible={modalOpen} onClose={() => setModalOpen(false)} />
+          <AppConfirmModal
+            visible={exitModalOpen}
+            title="앱을 종료하시겠습니까?"
+            message="별자리 기록은 다음에 이어서 할 수 있어요."
+            cancelLabel="취소"
+            confirmLabel="종료"
+            onCancel={() => setExitModalOpen(false)}
+            onConfirm={handleExitApp}
+          />
+        </LinearGradient>
+      </ResponsiveScreen>
+    </StylesProvider>
   );
 }
 
 // ─── Styles ─────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: '#06101f',
-  },
+const HOME_STYLE_DEF = {
   screen: {
     flex: 1,
     overflow: 'hidden',
@@ -701,42 +647,6 @@ const styles = StyleSheet.create({
     color: 'rgba(200,218,255,0.6)',
     letterSpacing: -0.13,
   },
-  navSafe: {
-    backgroundColor: 'rgba(8,20,48,0.92)',
-  },
-  nav: {
-    zIndex: 20,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.07)',
-    paddingTop: 8,
-    paddingHorizontal: 4,
-    paddingBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-  },
-  tabBtn: {
-    borderRadius: 12,
-    paddingTop: 8,
-    paddingBottom: 6,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    gap: 3,
-    minWidth: 56,
-  },
-  tabBtnActive: {
-    backgroundColor: 'rgba(200,218,255,0.1)',
-  },
-  tabLabel: {
-    fontSize: 10,
-    fontWeight: '400',
-    color: 'rgba(122,156,200,0.55)',
-    letterSpacing: -0.1,
-  },
-  tabLabelActive: {
-    fontWeight: '500',
-    color: '#e8eef8',
-  },
   bgStar: {
     position: 'absolute',
     backgroundColor: 'rgba(200,218,255,0.7)',
@@ -798,4 +708,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '400',
   },
-});
+} as const;
+
+const { StylesProvider, useStyles, useScreenStyles } =
+  createResponsiveStylesContext<typeof HOME_STYLE_DEF>();

@@ -6,11 +6,13 @@ import {
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
+import { useResponsive } from '../responsive';
+
 export interface BackButtonProps {
   onPress: () => void;
   disabled?: boolean;
   style?: ViewStyle;
-  /** 기본 32 — 온보딩 등에서 더 크게 쓸 때 조절 */
+  /** 디자인 px — 기본 32 */
   iconSize?: number;
 }
 
@@ -28,14 +30,16 @@ function BackChevron({ size }: { size: number }) {
   );
 }
 
-/** 화면 좌상단 뒤로가기 — ScreenLayout.top 여백과 함께 사용 */
+/** 화면 좌상단 뒤로가기 — 터치 영역·아이콘 자동 스케일 */
 export function BackButton({
   onPress,
   disabled = false,
   style,
   iconSize = 32,
 }: BackButtonProps) {
-  const hitSize = Math.max(52, iconSize + 20);
+  const { scale } = useResponsive();
+  const scaledIcon = scale(iconSize);
+  const hitSize = Math.max(scale(52), scaledIcon + scale(20));
 
   return (
     <Pressable
@@ -54,7 +58,7 @@ export function BackButton({
       accessibilityLabel="뒤로가기"
       accessibilityState={{ disabled }}
     >
-      <BackChevron size={iconSize} />
+      <BackChevron size={scaledIcon} />
     </Pressable>
   );
 }
@@ -66,7 +70,9 @@ export function BackButtonTouchable({
   style,
   iconSize = 28,
 }: BackButtonProps) {
-  const hitSize = Math.max(48, iconSize + 20);
+  const { scale } = useResponsive();
+  const scaledIcon = scale(iconSize);
+  const hitSize = Math.max(scale(48), scaledIcon + scale(20));
 
   return (
     <TouchableOpacity
@@ -76,7 +82,7 @@ export function BackButtonTouchable({
       accessibilityLabel="뒤로가기"
       activeOpacity={0.7}
     >
-      <BackChevron size={iconSize} />
+      <BackChevron size={scaledIcon} />
     </TouchableOpacity>
   );
 }

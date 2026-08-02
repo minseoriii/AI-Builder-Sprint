@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
 
-import { useA2ZFonts } from '@/assets_shared';
+import { useA2ZFonts, ResponsiveProvider } from '@/assets_shared';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
 
 function LoadingScreen() {
@@ -104,21 +104,30 @@ export default function RootLayout() {
     return <LoadingScreen />;
   }
 
+  const tabScreenOptions = {
+    animation: 'none' as const,
+    gestureEnabled: false,
+    animationTypeForReplace: 'push' as const,
+  };
+
   return (
-    <>
+    <ResponsiveProvider>
       <Stack
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: '#06101f' },
         }}
       >
-        <Stack.Screen name="index" />
+        <Stack.Screen name="index" options={tabScreenOptions} />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="star-record" />
-        <Stack.Screen name="galaxy-view" />
+        <Stack.Screen name="galaxy-view" options={tabScreenOptions} />
+        <Stack.Screen name="observatory" options={tabScreenOptions} />
+        <Stack.Screen name="comet" options={tabScreenOptions} />
+        <Stack.Screen name="mypage" options={tabScreenOptions} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
       <StatusBar style="light" />
-    </>
+    </ResponsiveProvider>
   );
 }

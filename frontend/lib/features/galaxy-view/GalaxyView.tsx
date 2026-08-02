@@ -9,15 +9,20 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg';
 
+import {
+  BottomNavigationBar,
+  ResponsiveScreen,
+  createResponsiveStylesContext,
+  useResponsive,
+} from '@/assets_shared';
+
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 type CurrentView = 'GALLERY' | 'CONSTELLATION' | 'STAR';
-type NavTab = 'galaxy' | 'observatory' | 'home' | 'comet' | 'mypage';
 
 type StarTags = {
   who: string;
@@ -561,14 +566,6 @@ const GALLERY_ITEMS: GalleryItem[] = [
   },
 ];
 
-const NAV_TABS: { id: NavTab; label: string }[] = [
-  { id: 'galaxy', label: '은하감상' },
-  { id: 'observatory', label: '천문연구소' },
-  { id: 'home', label: '홈' },
-  { id: 'comet', label: '혜성관측소' },
-  { id: 'mypage', label: '마이페이지' },
-];
-
 const FILTER_PILLS = ['2026년', '여름', '성단 선택'] as const;
 
 const STAR_TAGS_ORDER: { key: keyof StarTags; label: string }[] = [
@@ -617,6 +614,7 @@ const STAR_DOTS = [
 ];
 
 function StarField() {
+  const styles = useStyles();
   const { width, height } = useWindowDimensions();
 
   return (
@@ -771,127 +769,11 @@ function ClusterIcon({ small = false }: { small?: boolean }) {
   );
 }
 
-// ─── Bottom Nav Icons ──────────────────────────────────────────────────────
-
-function NavTabIcon({ id, active }: { id: NavTab; active: boolean }) {
-  const activeColor = COLORS.cyan;
-  const idleColor = COLORS.textMuted;
-  const c = active ? activeColor : idleColor;
-
-  switch (id) {
-    case 'galaxy':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 22 22" fill="none">
-          <Circle cx={11} cy={11} r={4} fill={c} opacity={active ? 0.9 : 0.7} />
-          {active ? (
-            <Circle cx={11} cy={11} r={7} stroke={COLORS.cyan} strokeWidth={1} opacity={0.3} />
-          ) : null}
-          <Circle cx={4} cy={6} r={1.5} fill={active ? '#A78BFA' : idleColor} opacity={0.8} />
-          <Circle cx={18} cy={8} r={1} fill={active ? '#A78BFA' : idleColor} opacity={0.7} />
-          <Circle cx={6} cy={17} r={1} fill={active ? COLORS.cyan : idleColor} opacity={0.6} />
-          <Circle cx={17} cy={16} r={1.5} fill={active ? '#A78BFA' : idleColor} opacity={0.7} />
-        </Svg>
-      );
-    case 'observatory':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 22 22" fill="none">
-          <Path d="M9 13h4v6a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-6z" fill={c} />
-          <Path d="M4 13 Q11 4 18 13" stroke={c} strokeWidth={1.5} fill="none" />
-          <Line x1={11} y1={4} x2={11} y2={2} stroke={c} strokeWidth={1.5} />
-        </Svg>
-      );
-    case 'home':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 22 22" fill="none">
-          <Path
-            d="M3 10L11 3L19 10V19H14V14H8V19H3V10Z"
-            stroke={c}
-            strokeWidth={1.5}
-            fill="none"
-            strokeLinejoin="round"
-          />
-        </Svg>
-      );
-    case 'comet':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 22 22" fill="none">
-          <Circle cx={15} cy={7} r={3} fill={c} opacity={0.9} />
-          <Path d="M13 9L4 18" stroke={c} strokeWidth={1.5} strokeLinecap="round" />
-          <Path
-            d="M11 11L4 14"
-            stroke={c}
-            strokeWidth={1}
-            strokeLinecap="round"
-            opacity={0.5}
-          />
-          <Path
-            d="M13 13L8 18"
-            stroke={c}
-            strokeWidth={1}
-            strokeLinecap="round"
-            opacity={0.4}
-          />
-        </Svg>
-      );
-    case 'mypage':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 22 22" fill="none">
-          <Circle cx={11} cy={8} r={3.5} stroke={c} strokeWidth={1.5} />
-          <Path
-            d="M4 19C4 15.686 7.134 13 11 13C14.866 13 18 15.686 18 19"
-            stroke={c}
-            strokeWidth={1.5}
-            strokeLinecap="round"
-          />
-        </Svg>
-      );
-  }
-}
-
-function BottomNav({
-  activeNav,
-  onPress,
-}: {
-  activeNav: NavTab;
-  onPress: (id: NavTab) => void;
-}) {
-  return (
-    <View style={styles.bottomNav}>
-      <LinearGradient
-        colors={['rgba(8,10,28,0.85)', 'rgba(8,10,28,0.97)']}
-        style={StyleSheet.absoluteFill}
-      />
-      <SafeAreaView edges={['bottom']} style={styles.navSafe}>
-        <View style={styles.nav}>
-          {NAV_TABS.map((tab) => {
-            const isActive = tab.id === activeNav;
-            return (
-              <TouchableOpacity
-                key={tab.id}
-                onPress={() => onPress(tab.id)}
-                activeOpacity={0.7}
-                style={[styles.navItem, isActive && styles.navItemActive]}
-              >
-                {isActive ? <View style={styles.navGlow} pointerEvents="none" /> : null}
-                <NavTabIcon id={tab.id} active={isActive} />
-                <Text
-                  style={[styles.navLabel, isActive && styles.navLabelActive]}
-                  numberOfLines={1}
-                >
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </SafeAreaView>
-    </View>
-  );
-}
-
 // ─── Shared CTA ────────────────────────────────────────────────────────────
 
 function PrimaryButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const styles = useStyles();
+
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.88} style={styles.primaryBtn}>
       <LinearGradient
@@ -906,6 +788,8 @@ function PrimaryButton({ label, onPress }: { label: string; onPress: () => void 
 }
 
 function BackIconButton({ onPress }: { onPress: () => void }) {
+  const styles = useStyles();
+
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -941,6 +825,7 @@ function GalleryCard({
   cardWidth: number;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   const bgDots = Array.from({ length: 8 }, (_, j) => ({
     topPct: 15 + ((j * 31 + index * 17) % 70),
     leftPct: 10 + ((j * 43 + index * 23) % 80),
@@ -993,6 +878,7 @@ function GalleryCard({
 }
 
 function GalleryView({ onSelectItem }: { onSelectItem: (item: GalleryItem) => void }) {
+  const styles = useStyles();
   const { width } = useWindowDimensions();
   const gap = 12;
   const horizontalPad = 16;
@@ -1035,6 +921,8 @@ function ConstellationView({
   onViewStars: () => void;
   onBack: () => void;
 }) {
+  const styles = useStyles();
+
   return (
     <ScrollView
       style={styles.flex}
@@ -1100,6 +988,7 @@ function StarView({
   onNext: () => void;
   onBack: () => void;
 }) {
+  const styles = useStyles();
   const star = stars[starIdx];
   const isFirst = starIdx === 0;
   const isLast = starIdx === stars.length - 1;
@@ -1171,12 +1060,11 @@ function StarView({
 // ─── Main View ─────────────────────────────────────────────────────────────
 
 export default function GalaxyView() {
-  const router = useRouter();
+  const styles = useScreenStyles(GALAXY_STYLE_DEF);
   const [currentView, setCurrentView] = useState<CurrentView>('GALLERY');
   const [clusterIdx, setClusterIdx] = useState(0);
   const [constIdx, setConstIdx] = useState(0);
   const [starIdx, setStarIdx] = useState(0);
-  const activeNav: NavTab = 'galaxy';
 
   const cluster = CLUSTERS[clusterIdx];
   const constellation = cluster.constellations[constIdx];
@@ -1217,88 +1105,77 @@ export default function GalaxyView() {
   const prevStar = () => setStarIdx((i) => Math.max(0, i - 1));
   const nextStar = () => setStarIdx((i) => Math.min(stars.length - 1, i + 1));
 
-  const handleNavPress = (tabId: NavTab) => {
-    if (tabId === 'home') {
-      router.push('/');
-      return;
-    }
-    if (tabId === 'observatory') {
-      router.push('/observatory');
-      return;
-    }
-    if (tabId === 'galaxy') return;
-    // 혜성관측소 / 마이페이지 — 추후 라우트 연동
-  };
-
   return (
-    <View style={styles.root}>
-      <LinearGradient
-        colors={['#0F1430', '#0B0D1B', '#090C20', '#0D0F24']}
-        locations={[0, 0.35, 0.65, 1]}
-        style={StyleSheet.absoluteFill}
-      />
-      <StarField />
+    <StylesProvider styles={styles}>
+      <ResponsiveScreen style={{ backgroundColor: COLORS.bgDeep }}>
+        <LinearGradient
+          colors={['#0F1430', '#0B0D1B', '#090C20', '#0D0F24']}
+          locations={[0, 0.35, 0.65, 1]}
+          style={StyleSheet.absoluteFill}
+        />
+        <StarField />
 
-      {/* Nebula glow blobs */}
-      <View style={styles.nebulaPurple} pointerEvents="none" />
-      <View style={styles.nebulaCyan} pointerEvents="none" />
-      <View style={styles.nebulaViolet} pointerEvents="none" />
+        {/* Nebula glow blobs */}
+        <View style={styles.nebulaPurple} pointerEvents="none" />
+        <View style={styles.nebulaCyan} pointerEvents="none" />
+        <View style={styles.nebulaViolet} pointerEvents="none" />
 
-      <SafeAreaView style={styles.flex} edges={['top']}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>은하감상</Text>
-          <Text style={styles.headerSubtitle}>
-            &quot;2026년 여름의 은하에서 관측된 빛&quot;
-          </Text>
-        </View>
+        <SafeAreaView style={styles.flex} edges={['top']}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>은하감상</Text>
+            <Text style={styles.headerSubtitle}>
+              &quot;2026년 여름의 은하에서 관측된 빛&quot;
+            </Text>
+          </View>
 
-        {/* Filter pills only — no mode tabs */}
-        <View style={styles.filterRow}>
-          {FILTER_PILLS.map((label) => (
-            <TouchableOpacity key={label} activeOpacity={0.85} style={styles.filterPill}>
-              <Text style={styles.filterPillText}>{label}</Text>
-              <Text style={styles.filterCaret}>▾</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+          {/* Filter pills only — no mode tabs */}
+          <View style={styles.filterRow}>
+            {FILTER_PILLS.map((label) => (
+              <TouchableOpacity key={label} activeOpacity={0.85} style={styles.filterPill}>
+                <Text style={styles.filterPillText}>{label}</Text>
+                <Text style={styles.filterCaret}>▾</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        {/* Content */}
-        <View style={styles.content}>
-          {currentView === 'GALLERY' ? (
-            <GalleryView onSelectItem={handleGallerySelect} />
-          ) : null}
-          {currentView === 'CONSTELLATION' ? (
-            <ConstellationView
-              cluster={cluster}
-              constellation={constellation}
-              onPrev={prevConst}
-              onNext={nextConst}
-              onViewStars={handleViewStars}
-              onBack={() => setCurrentView('GALLERY')}
-            />
-          ) : null}
-          {currentView === 'STAR' ? (
-            <StarView
-              clusterName={cluster.name}
-              stars={stars}
-              starIdx={starIdx}
-              onPrev={prevStar}
-              onNext={nextStar}
-              onBack={() => setCurrentView('CONSTELLATION')}
-            />
-          ) : null}
-        </View>
-      </SafeAreaView>
+          {/* Content */}
+          <View style={styles.content}>
+            {currentView === 'GALLERY' ? (
+              <GalleryView onSelectItem={handleGallerySelect} />
+            ) : null}
+            {currentView === 'CONSTELLATION' ? (
+              <ConstellationView
+                cluster={cluster}
+                constellation={constellation}
+                onPrev={prevConst}
+                onNext={nextConst}
+                onViewStars={handleViewStars}
+                onBack={() => setCurrentView('GALLERY')}
+              />
+            ) : null}
+            {currentView === 'STAR' ? (
+              <StarView
+                clusterName={cluster.name}
+                stars={stars}
+                starIdx={starIdx}
+                onPrev={prevStar}
+                onNext={nextStar}
+                onBack={() => setCurrentView('CONSTELLATION')}
+              />
+            ) : null}
+          </View>
+        </SafeAreaView>
 
-      <BottomNav activeNav={activeNav} onPress={handleNavPress} />
-    </View>
+        <BottomNavigationBar activeTab="galaxy" />
+      </ResponsiveScreen>
+    </StylesProvider>
   );
 }
 
 // ─── Styles ────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const GALAXY_STYLE_DEF = {
   root: {
     flex: 1,
     backgroundColor: COLORS.bgDeep,
@@ -1596,54 +1473,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     zIndex: 1,
   },
+} as const;
 
-  bottomNav: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 100,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.07)',
-  },
-  navSafe: {
-    backgroundColor: 'transparent',
-  },
-  nav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingTop: 8,
-    paddingHorizontal: 4,
-    paddingBottom: 4,
-    height: 64,
-  },
-  navItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    minHeight: 48,
-    position: 'relative',
-  },
-  navItemActive: {},
-  navGlow: {
-    position: 'absolute',
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(0,245,255,0.12)',
-    top: -2,
-  },
-  navLabel: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: COLORS.textMuted,
-  },
-  navLabelActive: {
-    color: COLORS.cyan,
-    textShadowColor: 'rgba(0,245,255,0.6)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
-  },
-});
+const { StylesProvider, useStyles, useScreenStyles } =
+  createResponsiveStylesContext<typeof GALAXY_STYLE_DEF>();

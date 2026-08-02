@@ -1,0 +1,53 @@
+import { StyleSheet, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import {
+  AppText,
+  BottomNavigationBar,
+  ResponsiveScreen,
+  useResponsiveStyles,
+} from '@/assets_shared';
+
+const STYLE_DEF = {
+  safe: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 120,
+    gap: 8,
+  },
+  title: {
+    fontSize: 22,
+  },
+  subtitle: {
+    opacity: 0.65,
+  },
+} as const;
+
+export default function MyPageView() {
+  const styles = useResponsiveStyles(STYLE_DEF);
+
+  return (
+    <ResponsiveScreen style={{ backgroundColor: '#06101f' }}>
+      <LinearGradient
+        colors={['#0d1f48', '#081432', '#060e28']}
+        locations={[0, 0.45, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.content}>
+          <AppText variant="emphasis" style={styles.title}>
+            마이페이지
+          </AppText>
+          <AppText style={styles.subtitle}>준비 중입니다.</AppText>
+        </View>
+      </SafeAreaView>
+      <BottomNavigationBar activeTab="mypage" />
+    </ResponsiveScreen>
+  );
+}

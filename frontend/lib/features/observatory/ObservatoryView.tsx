@@ -8,24 +8,19 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import Svg, { Circle, Ellipse, Line, Path } from 'react-native-svg';
+
+import {
+  BottomNavigationBar,
+  ResponsiveScreen,
+  createResponsiveStylesContext,
+} from '@/assets_shared';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 type SubTab = 'stats' | 'report';
-type NavTab = 'galaxy' | 'observatory' | 'home' | 'comet' | 'mypage';
-
-const NAV_TABS: { id: NavTab; label: string }[] = [
-  { id: 'galaxy', label: '은하감상' },
-  { id: 'observatory', label: '천문연구소' },
-  { id: 'home', label: '홈' },
-  { id: 'comet', label: '혜성관측소' },
-  { id: 'mypage', label: '마이페이지' },
-];
 
 interface ClusterStat {
   name: string;
@@ -106,6 +101,7 @@ const STAR_DOTS = [
 ];
 
 function StarField() {
+  const styles = useStyles();
   const { width, height } = useWindowDimensions();
 
   return (
@@ -143,6 +139,8 @@ function StatCard({
   accent: string;
   valueSm?: boolean;
 }) {
+  const styles = useStyles();
+
   return (
     <View style={styles.statCard}>
       <View style={[styles.statGlow, { backgroundColor: accent }]} />
@@ -177,6 +175,8 @@ function ClusterBar({
   glow: string;
   percent: number;
 }) {
+  const styles = useStyles();
+
   return (
     <View style={styles.barRow}>
       <Text style={styles.barName} numberOfLines={1}>
@@ -201,6 +201,7 @@ function ClusterBar({
 }
 
 function StatsContent({ data }: { data: ObservatoryMockData }) {
+  const styles = useStyles();
   const clusterTotal = useMemo(
     () => data.clusters.reduce((sum, c) => sum + c.count, 0),
     [data.clusters],
@@ -270,6 +271,8 @@ function StatsContent({ data }: { data: ObservatoryMockData }) {
 }
 
 function ReportPlaceholder() {
+  const styles = useStyles();
+
   return (
     <View style={styles.reportPad}>
       <View style={styles.card}>
@@ -282,192 +285,84 @@ function ReportPlaceholder() {
   );
 }
 
-// ─── Bottom Nav (matches app/index.tsx) ─────────────────────────────────────
-
-function NavTabIcon({ id, color }: { id: NavTab; color: string }) {
-  switch (id) {
-    case 'galaxy':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-          <Circle cx="12" cy="12" r="10" stroke={color} strokeWidth={1.5} />
-          <Ellipse cx="12" cy="12" rx="4" ry="10" stroke={color} strokeWidth={1.5} />
-          <Line x1="2" y1="12" x2="22" y2="12" stroke={color} strokeWidth={1.5} />
-        </Svg>
-      );
-    case 'observatory':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-          <Path
-            d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"
-            stroke={color}
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </Svg>
-      );
-    case 'home':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 24 24" fill={color}>
-          <Path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
-        </Svg>
-      );
-    case 'comet':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-          <Circle cx="12" cy="12" r="3" stroke={color} strokeWidth={1.5} />
-          <Path
-            d="M12 2v2M12 20v2M2 12h2M20 12h2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
-            stroke={color}
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </Svg>
-      );
-    case 'mypage':
-      return (
-        <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-          <Path
-            d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
-            stroke={color}
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <Circle cx="12" cy="7" r="4" stroke={color} strokeWidth={1.5} />
-        </Svg>
-      );
-  }
-}
-
-function BottomNav({
-  activeNav,
-  onPress,
-}: {
-  activeNav: NavTab;
-  onPress: (id: NavTab) => void;
-}) {
-  return (
-    <View style={styles.bottomNav}>
-      <SafeAreaView edges={['bottom']} style={styles.navSafe}>
-        <View style={styles.nav}>
-          {NAV_TABS.map((tab) => {
-            const isActive = tab.id === activeNav;
-            const color = isActive ? '#e8eef8' : 'rgba(122,156,200,0.55)';
-            return (
-              <TouchableOpacity
-                key={tab.id}
-                onPress={() => onPress(tab.id)}
-                activeOpacity={0.7}
-                style={[styles.navItem, isActive && styles.navItemActive]}
-              >
-                <NavTabIcon id={tab.id} color={color} />
-                <Text
-                  style={[styles.navLabel, isActive && styles.navLabelActive]}
-                  numberOfLines={1}
-                >
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </SafeAreaView>
-    </View>
-  );
-}
-
 // ─── Main View ─────────────────────────────────────────────────────────────
 
 export default function ObservatoryView() {
-  const router = useRouter();
+  const styles = useScreenStyles(OBSERVATORY_STYLE_DEF);
   const [activeTab, setActiveTab] = useState<SubTab>('stats');
   const [mockData] = useState<ObservatoryMockData>(MOCK_DATA);
-  const activeNav: NavTab = 'observatory';
-
-  const handleNavPress = (tabId: NavTab) => {
-    if (tabId === 'home') {
-      router.push('/');
-      return;
-    }
-    if (tabId === 'observatory') {
-      return;
-    }
-    if (tabId === 'galaxy') {
-      router.push('/galaxy-view');
-      return;
-    }
-    // 혜성관측소 / 마이페이지 — 추후 라우트 연동
-  };
 
   return (
-    <View style={styles.root}>
-      <LinearGradient
-        colors={['#0d1f48', '#081432', COLORS.bgDeep]}
-        locations={[0, 0.45, 1]}
-        style={StyleSheet.absoluteFill}
-      />
-      <StarField />
+    <StylesProvider styles={styles}>
+      <ResponsiveScreen style={{ backgroundColor: COLORS.bgDeep }}>
+        <View style={styles.root}>
+          <LinearGradient
+            colors={['#0d1f48', '#081432', COLORS.bgDeep]}
+            locations={[0, 0.45, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+          <StarField />
 
-      <SafeAreaView style={styles.flex} edges={['top']}>
-        <ScrollView
-          style={styles.flex}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>천문연구소</Text>
-          </View>
+          <SafeAreaView style={styles.flex} edges={['top']}>
+            <ScrollView
+              style={styles.flex}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Header */}
+              <View style={styles.header}>
+                <Text style={styles.headerTitle}>천문연구소</Text>
+              </View>
 
-          {/* Sub-tab switcher */}
-          <View style={styles.tabPad}>
-            <View style={styles.tabSwitcher}>
-              {(['stats', 'report'] as const).map((tab) => {
-                const active = activeTab === tab;
-                const label = tab === 'stats' ? '은하 관측 통계' : '천문 리포트';
+              {/* Sub-tab switcher */}
+              <View style={styles.tabPad}>
+                <View style={styles.tabSwitcher}>
+                  {(['stats', 'report'] as const).map((tab) => {
+                    const active = activeTab === tab;
+                    const label = tab === 'stats' ? '은하 관측 통계' : '천문 리포트';
 
-                return (
-                  <TouchableOpacity
-                    key={tab}
-                    onPress={() => setActiveTab(tab)}
-                    activeOpacity={0.85}
-                    style={[styles.tabBtn, active && styles.tabBtnActive]}
-                  >
-                    {active ? (
-                      <LinearGradient
-                        colors={['rgba(124,58,237,0.25)', 'rgba(6,182,212,0.15)']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={StyleSheet.absoluteFillObject}
-                      />
-                    ) : null}
-                    <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
-                      {label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
+                    return (
+                      <TouchableOpacity
+                        key={tab}
+                        onPress={() => setActiveTab(tab)}
+                        activeOpacity={0.85}
+                        style={[styles.tabBtn, active && styles.tabBtnActive]}
+                      >
+                        {active ? (
+                          <LinearGradient
+                            colors={['rgba(124,58,237,0.25)', 'rgba(6,182,212,0.15)']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={StyleSheet.absoluteFillObject}
+                          />
+                        ) : null}
+                        <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
 
-          {activeTab === 'stats' ? (
-            <StatsContent data={mockData} />
-          ) : (
-            <ReportPlaceholder />
-          )}
-        </ScrollView>
-      </SafeAreaView>
+              {activeTab === 'stats' ? (
+                <StatsContent data={mockData} />
+              ) : (
+                <ReportPlaceholder />
+              )}
+            </ScrollView>
+          </SafeAreaView>
 
-      <BottomNav activeNav={activeNav} onPress={handleNavPress} />
-    </View>
+          <BottomNavigationBar activeTab="observatory" />
+        </View>
+      </ResponsiveScreen>
+    </StylesProvider>
   );
 }
 
 // ─── Styles ────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const OBSERVATORY_STYLE_DEF = {
   root: {
     flex: 1,
     backgroundColor: COLORS.bgDeep,
@@ -750,64 +645,7 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingHorizontal: 20,
   },
+} as const;
 
-  // Bottom navigation (fixed)
-  bottomNav: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 100,
-  },
-  navSafe: {
-    backgroundColor: 'rgba(8,20,48,0.92)',
-  },
-  nav: {
-    zIndex: 20,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.07)',
-    paddingTop: 8,
-    paddingHorizontal: 4,
-    paddingBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-  },
-  navItem: {
-    borderRadius: 12,
-    paddingTop: 8,
-    paddingBottom: 6,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    gap: 3,
-    minWidth: 56,
-  },
-  navItemActive: {
-    backgroundColor: 'rgba(200,218,255,0.1)',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#A78BFA',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.55,
-        shadowRadius: 10,
-      },
-      android: {
-        elevation: 4,
-      },
-      default: {},
-    }),
-  },
-  navLabel: {
-    fontSize: 10,
-    fontWeight: '400',
-    color: 'rgba(122,156,200,0.55)',
-    letterSpacing: -0.1,
-  },
-  navLabelActive: {
-    fontWeight: '500',
-    color: '#e8eef8',
-    textShadowColor: 'rgba(167,139,250,0.8)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
-  },
-});
+const { StylesProvider, useStyles, useScreenStyles } =
+  createResponsiveStylesContext<typeof OBSERVATORY_STYLE_DEF>();
