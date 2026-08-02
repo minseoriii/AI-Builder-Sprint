@@ -12,7 +12,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-import { BottomNavigationBar } from '@/assets_shared';
+import {
+  BottomNavigationBar,
+  ResponsiveScreen,
+  createResponsiveStylesContext,
+} from '@/assets_shared';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -97,6 +101,7 @@ const STAR_DOTS = [
 ];
 
 function StarField() {
+  const styles = useStyles();
   const { width, height } = useWindowDimensions();
 
   return (
@@ -134,6 +139,8 @@ function StatCard({
   accent: string;
   valueSm?: boolean;
 }) {
+  const styles = useStyles();
+
   return (
     <View style={styles.statCard}>
       <View style={[styles.statGlow, { backgroundColor: accent }]} />
@@ -168,6 +175,8 @@ function ClusterBar({
   glow: string;
   percent: number;
 }) {
+  const styles = useStyles();
+
   return (
     <View style={styles.barRow}>
       <Text style={styles.barName} numberOfLines={1}>
@@ -192,6 +201,7 @@ function ClusterBar({
 }
 
 function StatsContent({ data }: { data: ObservatoryMockData }) {
+  const styles = useStyles();
   const clusterTotal = useMemo(
     () => data.clusters.reduce((sum, c) => sum + c.count, 0),
     [data.clusters],
@@ -261,6 +271,8 @@ function StatsContent({ data }: { data: ObservatoryMockData }) {
 }
 
 function ReportPlaceholder() {
+  const styles = useStyles();
+
   return (
     <View style={styles.reportPad}>
       <View style={styles.card}>
@@ -276,76 +288,81 @@ function ReportPlaceholder() {
 // ─── Main View ─────────────────────────────────────────────────────────────
 
 export default function ObservatoryView() {
+  const styles = useScreenStyles(OBSERVATORY_STYLE_DEF);
   const [activeTab, setActiveTab] = useState<SubTab>('stats');
   const [mockData] = useState<ObservatoryMockData>(MOCK_DATA);
 
   return (
-    <View style={styles.root}>
-      <LinearGradient
-        colors={['#0d1f48', '#081432', COLORS.bgDeep]}
-        locations={[0, 0.45, 1]}
-        style={StyleSheet.absoluteFill}
-      />
-      <StarField />
+    <StylesProvider styles={styles}>
+      <ResponsiveScreen style={{ backgroundColor: COLORS.bgDeep }}>
+        <View style={styles.root}>
+          <LinearGradient
+            colors={['#0d1f48', '#081432', COLORS.bgDeep]}
+            locations={[0, 0.45, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+          <StarField />
 
-      <SafeAreaView style={styles.flex} edges={['top']}>
-        <ScrollView
-          style={styles.flex}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>천문연구소</Text>
-          </View>
+          <SafeAreaView style={styles.flex} edges={['top']}>
+            <ScrollView
+              style={styles.flex}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Header */}
+              <View style={styles.header}>
+                <Text style={styles.headerTitle}>천문연구소</Text>
+              </View>
 
-          {/* Sub-tab switcher */}
-          <View style={styles.tabPad}>
-            <View style={styles.tabSwitcher}>
-              {(['stats', 'report'] as const).map((tab) => {
-                const active = activeTab === tab;
-                const label = tab === 'stats' ? '은하 관측 통계' : '천문 리포트';
+              {/* Sub-tab switcher */}
+              <View style={styles.tabPad}>
+                <View style={styles.tabSwitcher}>
+                  {(['stats', 'report'] as const).map((tab) => {
+                    const active = activeTab === tab;
+                    const label = tab === 'stats' ? '은하 관측 통계' : '천문 리포트';
 
-                return (
-                  <TouchableOpacity
-                    key={tab}
-                    onPress={() => setActiveTab(tab)}
-                    activeOpacity={0.85}
-                    style={[styles.tabBtn, active && styles.tabBtnActive]}
-                  >
-                    {active ? (
-                      <LinearGradient
-                        colors={['rgba(124,58,237,0.25)', 'rgba(6,182,212,0.15)']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={StyleSheet.absoluteFillObject}
-                      />
-                    ) : null}
-                    <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
-                      {label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
+                    return (
+                      <TouchableOpacity
+                        key={tab}
+                        onPress={() => setActiveTab(tab)}
+                        activeOpacity={0.85}
+                        style={[styles.tabBtn, active && styles.tabBtnActive]}
+                      >
+                        {active ? (
+                          <LinearGradient
+                            colors={['rgba(124,58,237,0.25)', 'rgba(6,182,212,0.15)']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={StyleSheet.absoluteFillObject}
+                          />
+                        ) : null}
+                        <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
 
-          {activeTab === 'stats' ? (
-            <StatsContent data={mockData} />
-          ) : (
-            <ReportPlaceholder />
-          )}
-        </ScrollView>
-      </SafeAreaView>
+              {activeTab === 'stats' ? (
+                <StatsContent data={mockData} />
+              ) : (
+                <ReportPlaceholder />
+              )}
+            </ScrollView>
+          </SafeAreaView>
 
-      <BottomNavigationBar activeTab="observatory" />
-    </View>
+          <BottomNavigationBar activeTab="observatory" />
+        </View>
+      </ResponsiveScreen>
+    </StylesProvider>
   );
 }
 
 // ─── Styles ────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const OBSERVATORY_STYLE_DEF = {
   root: {
     flex: 1,
     backgroundColor: COLORS.bgDeep,
@@ -628,4 +645,7 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingHorizontal: 20,
   },
-});
+} as const;
+
+const { StylesProvider, useStyles, useScreenStyles } =
+  createResponsiveStylesContext<typeof OBSERVATORY_STYLE_DEF>();

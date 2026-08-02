@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 
 import { Colors } from '../colors';
+import { useResponsive } from '../responsive';
 import { FontFamily, FontSize } from '../typography';
 
 export type PrimaryButtonSize = 'large' | 'medium' | 'small';
@@ -21,7 +22,7 @@ const SIZE_CONFIG: Record<
   small: { width: 180.89, height: 40, fontSize: FontSize.buttonSmall },
 };
 
-/** PrimaryButton 크기·폰트 토큰 */
+/** PrimaryButton 디자인 기준 크기·폰트 토큰 */
 export const PrimaryButtonDimensions = SIZE_CONFIG;
 
 export interface PrimaryButtonProps {
@@ -37,9 +38,7 @@ export interface PrimaryButtonProps {
 }
 
 /**
- * 큰·중간·작은 primary 버튼
- * - 비활성: 텍스트 #A4A4A4, 채우기 F8EEC1 15%, 외곽 #A4A4A4
- * - 활성: 텍스트 #FFF9DD, 채우기 F8EEC1 15%, 외곽 F8EEC1 60%
+ * 큰·중간·작은 primary 버튼 — 기기 너비에 맞게 스케일
  */
 export function PrimaryButton({
   label,
@@ -50,7 +49,10 @@ export function PrimaryButton({
   style,
   textStyle,
 }: PrimaryButtonProps) {
-  const config = SIZE_CONFIG[size];
+  const { scale, fontScale, width: screenWidth } = useResponsive();
+  const design = SIZE_CONFIG[size];
+  const buttonWidth = Math.min(scale(design.width), screenWidth - scale(40));
+  const buttonHeight = scale(design.height);
   const isActive = !disabled;
 
   return (
@@ -60,9 +62,9 @@ export function PrimaryButton({
       style={({ pressed }) => [
         styles.base,
         {
-          width: config.width,
-          height: config.height,
-          borderRadius: config.height / 2,
+          width: buttonWidth,
+          height: buttonHeight,
+          borderRadius: buttonHeight / 2,
           backgroundColor: Colors.button.fill,
           borderColor: isActive
             ? Colors.button.borderActive
@@ -79,7 +81,7 @@ export function PrimaryButton({
           style={[
             styles.label,
             {
-              fontSize: config.fontSize,
+              fontSize: fontScale(design.fontSize),
               color: isActive
                 ? Colors.text.buttonActive
                 : Colors.text.disabled,

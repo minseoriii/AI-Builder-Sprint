@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, TextStyle, ViewStyle } from 'react-native';
 
 import { Colors } from '../colors';
+import { useResponsive } from '../responsive';
 import { FontFamily, FontSize } from '../typography';
 
 const TAG_HEIGHT = 40;
@@ -17,11 +18,7 @@ export interface TagButtonProps {
   textStyle?: TextStyle;
 }
 
-/**
- * 태그 버튼 (높이 40, 가로는 텍스트 길이에 맞춤)
- * - 비활성: 텍스트 F8EEC1, 외곽 F8EEC1 60%, 채우기 F8EEC1 30%
- * - 활성: 텍스트 F8EEC1 bold, 외곽 F8EEC1 2px, 채우기 F8EEC1 45%
- */
+/** 태그 버튼 — 높이·폰트가 기기 크기에 맞게 스케일 */
 export function TagButton({
   label,
   selected = false,
@@ -30,6 +27,9 @@ export function TagButton({
   style,
   textStyle,
 }: TagButtonProps) {
+  const { scale, fontScale } = useResponsive();
+  const tagHeight = scale(TAG_HEIGHT);
+  const tagFontSize = fontScale(FontSize.tag);
   const isActive = selected;
 
   return (
@@ -39,8 +39,9 @@ export function TagButton({
       style={({ pressed }) => [
         styles.base,
         {
-          height: TAG_HEIGHT,
-          borderRadius: TAG_HEIGHT / 2,
+          height: tagHeight,
+          borderRadius: tagHeight / 2,
+          paddingHorizontal: scale(TAG_PADDING_HORIZONTAL),
           backgroundColor: isActive
             ? Colors.tag.fillActive
             : Colors.tag.fillInactive,
@@ -57,8 +58,13 @@ export function TagButton({
       accessibilityState={{ selected, disabled }}
     >
       <Text
+        numberOfLines={1}
         style={[
           styles.label,
+          {
+            fontSize: tagFontSize,
+            lineHeight: tagFontSize + scale(6),
+          },
           isActive && styles.labelActive,
           textStyle,
         ]}
@@ -73,22 +79,17 @@ const styles = StyleSheet.create({
   base: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: TAG_PADDING_HORIZONTAL,
     alignSelf: 'flex-start',
     flexShrink: 0,
   },
   label: {
     fontFamily: FontFamily.regular,
-    fontSize: FontSize.tag,
-    lineHeight: FontSize.tag + 6,
     color: Colors.text.tag,
     textAlign: 'center',
     flexShrink: 0,
   },
   labelActive: {
-    fontFamily: FontFamily.bold,
-    fontSize: FontSize.tag,
-    lineHeight: FontSize.tag + 6,
+    color: Colors.text.tag,
   },
   pressed: {
     opacity: 0.9,

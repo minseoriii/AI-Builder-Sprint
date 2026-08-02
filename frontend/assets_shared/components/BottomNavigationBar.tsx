@@ -1,10 +1,8 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Palette, withOpacity } from '../colors';
-import { FontFamily } from '../typography';
 import {
   icComet,
   icGalaxyView,
@@ -12,14 +10,16 @@ import {
   icLab,
   icMyPage,
 } from '../images/navigation';
+import { useResponsive } from '../responsive';
+import { FontFamily } from '../typography';
 
 export type BottomNavTab = 'galaxy' | 'observatory' | 'home' | 'comet' | 'mypage';
 
+/** 디자인 기준 치수 (412×86) — 하이라이트 영역 = 바 전체 높이 */
 export const BottomNavigationBarDimensions = {
   designWidth: 412,
   height: 86,
-  tabHighlightWidth: 69,
-  tabHighlightHeight: 86,
+  tabHighlightInset: 2,
   iconSize: 28,
   fontSize: 14,
 } as const;
@@ -46,29 +46,62 @@ const NAV_TABS: {
 
 const ACTIVE_COLOR = Palette.cream;
 const INACTIVE_COLOR = withOpacity(Palette.cream, 0.45);
-const HIGHLIGHT_COLOR = withOpacity(Palette.creamActive, 0.35);
+
+const CREAM = Palette.creamActive;
+
+/** 활성 탭 — 위 연함 → 아래로 갈수록 진함 */
+const HIGHLIGHT_GRADIENT = {
+  colors: [
+    withOpacity(CREAM, 0.06),
+    withOpacity(CREAM, 0.14),
+    withOpacity(CREAM, 0.24),
+    withOpacity(CREAM, 0.35),
+  ] as const,
+  locations: [0, 0.28, 0.62, 1] as const,
+};
+
+function TabHighlight({ inset }: { inset: number }) {
+  return (
+    <LinearGradient
+      colors={[...HIGHLIGHT_GRADIENT.colors]}
+      locations={[...HIGHLIGHT_GRADIENT.locations]}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+      style={[
+        styles.tabHighlight,
+        { left: inset, right: inset },
+      ]}
+      pointerEvents="none"
+    />
+  );
+}
 
 export interface BottomNavigationBarProps {
   activeTab: BottomNavTab;
 }
 
-/** 412×86 하단 탭 바 — 5개 화면 공용 */
+/** 412×86 하단 탭 바 — 하이라이트 영역까지만, safe area 여백 없음 */
 export function BottomNavigationBar({ activeTab }: BottomNavigationBarProps) {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const { scale, fontScale } = useResponsive();
+
+  const barHeight = scale(BottomNavigationBarDimensions.height);
+  const highlightInset = scale(BottomNavigationBarDimensions.tabHighlightInset);
+  const iconSize = scale(BottomNavigationBarDimensions.iconSize);
+  const labelSize = fontScale(BottomNavigationBarDimensions.fontSize);
 
   const handlePress = (tabId: BottomNavTab) => {
     if (tabId === activeTab) return;
-    router.replace(TAB_ROUTES[tabId]);
+    router.navigate(TAB_ROUTES[tabId]);
   };
 
   return (
-    <View style={[styles.wrapper, { paddingBottom: insets.bottom }]}>
+    <View style={styles.wrapper}>
       <LinearGradient
         colors={['#0A1833', '#122A52']}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
-        style={styles.bar}
+        style={[styles.bar, { height: barHeight }]}
       >
         {NAV_TABS.map((tab) => {
           const isActive = tab.id === activeTab;
@@ -82,23 +115,22 @@ export function BottomNavigationBar({ activeTab }: BottomNavigationBarProps) {
               accessibilityRole="button"
               accessibilityState={{ selected: isActive }}
             >
-              {isActive ? (
-                <View style={styles.tabHighlight} pointerEvents="none" />
-              ) : null}
+              {isActive ? <TabHighlight inset={highlightInset} /> : null}
               <Image
                 source={tab.icon}
-                style={[
-                  styles.icon,
-                  { tintColor: tint },
-                ]}
+                style={[styles.icon, { width: iconSize, height: iconSize, tintColor: tint }]}
                 resizeMode="contain"
               />
               <Text
                 numberOfLines={1}
                 style={[
                   styles.label,
-                  { color: tint },
-                  isActive ? styles.labelActive : null,
+                  {
+                    fontSize: labelSize,
+                    lineHeight: labelSize * 1.2,
+                    color: tint,
+                  },
+                  isActive && styles.labelActive,
                 ]}
               >
                 {tab.label}
@@ -111,9 +143,9 @@ export function BottomNavigationBar({ activeTab }: BottomNavigationBarProps) {
   );
 }
 
-/** 스크롤 콘텐츠 하단 여백 (safe area 포함) */
-export function bottomNavigationInset(bottomInset: number): number {
-  return BottomNavigationBarDimensions.height + bottomInset;
+/** 스크롤 콘텐츠 하단 여백 */
+export function bottomNavigationInset(barHeight?: number): number {
+  return barHeight ?? BottomNavigationBarDimensions.height;
 }
 
 const styles = StyleSheet.create({
@@ -125,35 +157,30 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   bar: {
-    height: BottomNavigationBarDimensions.height,
     flexDirection: 'row',
     alignItems: 'stretch',
     width: '100%',
-    maxWidth: BottomNavigationBarDimensions.designWidth,
-    alignSelf: 'center',
   },
   tabSlot: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
+    overflow: 'hidden',
   },
   tabHighlight: {
-    position: 'absolute',
-    top: 0,
-    width: BottomNavigationBarDimensions.tabHighlightWidth,
-    height: BottomNavigationBarDimensions.tabHighlightHeight,
-    backgroundColor: HIGHLIGHT_COLOR,
+    ...StyleSheet.absoluteFillObject,
   },
   icon: {
-    width: BottomNavigationBarDimensions.iconSize,
-    height: BottomNavigationBarDimensions.iconSize,
+    zIndex: 1,
   },
   label: {
     fontFamily: FontFamily.regular,
-    fontSize: BottomNavigationBarDimensions.fontSize,
-    lineHeight: BottomNavigationBarDimensions.fontSize * 1.2,
     letterSpacing: -0.14,
+    zIndex: 1,
+    textAlign: 'center',
+    width: '100%',
+    paddingHorizontal: 2,
   },
   labelActive: {
     fontFamily: FontFamily.medium,
