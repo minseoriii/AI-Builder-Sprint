@@ -1,9 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Easing,
+  Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,10 +19,35 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Defs, LinearGradient as SvgLinearGradient, Path, Stop } from 'react-native-svg';
+import Svg, { Defs, Path, Stop, LinearGradient as SvgLinearGradient } from 'react-native-svg';
+
+import {
+  AppText,
+  Background,
+  ClusterIcon,
+  Colors,
+  FontFamily,
+  PrimaryButton,
+  ScreenContainer,
+  ScreenLayout,
+  scaleDesign,
+} from '@/assets_shared';
+import type { ClusterIndex } from '@/assets_shared';
+import {
+  analyzeDailyRecord,
+  confirmDailyRecord,
+  CONSTELLATION_CATEGORIES,
+  DAILY_RECORD_DIMENSIONS,
+  getHome,
+  sanitizeDailyRecordTags,
+  sanitizeTag,
+  type CategoryRankingItem,
+  type DailyRecordTags,
+  type MissingQuestion,
+  updateDailyRecordDetails,
+} from '@/lib/api/daily-records';
+import { getOnboardingStatus } from '@/lib/api/onboarding';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -33,26 +64,13 @@ interface Tags {
 interface TagMeta {
   key: keyof Tags;
   label: string;
-  icon: string;
-  question: string;
-}
-
-interface BgStar {
-  id: number;
-  x: number;
-  y: number;
-  size: number;
-  delay: number;
-  dur: number;
+  dimension: (typeof DAILY_RECORD_DIMENSIONS)[number];
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
+/** Confirm/Complete 전용 강조 색상 (배경은 공유 Background 사용) */
 const COLORS = {
-  bg: '#0A1628',
-  bgDeep: '#060d20',
-  bgMid: '#091428',
-  bgTop: '#0e1f45',
   card: '#1E293B',
   purple: '#6366F1',
   purpleSoft: '#818cf8',
@@ -62,17 +80,70 @@ const COLORS = {
   white: '#FFFFFF',
 };
 
-const REQUIRED_TAGS: TagMeta[] = [
-  { key: 'together', label: '함께한 사람', icon: '👤', question: '누구와 함께한 기록인가요?' },
-  { key: 'place', label: '장소', icon: '📍', question: '어디에서 일어난 일인가요?' },
-  { key: 'time', label: '시간', icon: '🕐', question: '언제 일어난 일인가요?' },
-  { key: 'activity', label: '활동', icon: '🚶', question: '어떤 활동을 했나요?' },
-  { key: 'emotion', label: '감정', icon: '💜', question: '그때 감정은 어땠나요?' },
+const TAG_META: TagMeta[] = [
+  { key: 'together', label: '함께한 사람', dimension: 'PERSON' },
+  { key: 'place', label: '장소', dimension: 'PLACE' },
+  { key: 'time', label: '시간', dimension: 'TIME' },
+  { key: 'activity', label: '활동', dimension: 'ACTIVITY' },
+  { key: 'emotion', label: '감정', dimension: 'EMOTION' },
 ];
 
-const CLUSTER_NAMES = ['일상', '관계·사랑', '성장·도전', '휴식·여유', '특별한 순간'];
+/** 온보딩 선택 성단 순서(1~5) → ic_cluster1~5 1:1 매핑 */
+function userClusterToIconIndex(
+  category: string,
+  userClusters: string[],
+): ClusterIndex {
+  const index = userClusters.indexOf(category);
+  return (((index >= 0 ? index : 0) % 5) + 1) as ClusterIndex;
+}
 
-const LOADING_MS = 2000;
+/** 온보딩 선택 성단 목록 안에서만 순환 */
+function nextUserCluster(current: string, userClusters: string[]): string {
+  if (userClusters.length === 0) return current;
+  const index = userClusters.indexOf(current);
+  const next = (index >= 0 ? index + 1 : 0) % userClusters.length;
+  return userClusters[next];
+}
+
+/**
+ * AI 추천 주 성단을 온보딩 선택 목록에 맞춰 초기값으로 해석.
+ * 1) AI primary가 선택 목록에 있으면 그대로
+ * 2) ranking 중 선택 목록에 있는 첫 항목
+ * 3) 선택 목록 첫 성단
+ */
+function resolveInitialUserCluster(
+  aiPrimary: string,
+  ranking: CategoryRankingItem[],
+  userClusters: string[],
+): string {
+  if (userClusters.length === 0) {
+    return aiPrimary || CONSTELLATION_CATEGORIES[0];
+  }
+  if (userClusters.includes(aiPrimary)) {
+    return aiPrimary;
+  }
+  for (const item of ranking) {
+    if (userClusters.includes(item.category)) {
+      return item.category;
+    }
+  }
+  return userClusters[0];
+}
+
+const TAG_ICON_SOURCES: Record<keyof Tags, number> = {
+  together: require('@/assets_shared/images/Customer.png'),
+  place: require('@/assets_shared/images/Address.png'),
+  time: require('@/assets_shared/images/Vector.png'),
+  activity: require('@/assets_shared/images/Walking.png'),
+  emotion: require('@/assets_shared/images/Love.png'),
+};
+
+const PEN_ICON = require('@/assets_shared/images/Group 90.png');
+const COMPLETE_STAR_IMAGE = require('@/assets_shared/images/ic_shapestar4.png');
+
+/** STATE1/2 타이틀·서브카피 폭 계산용 — DesignFrame(412) 기준 좌우 대칭 여백 */
+const TITLE_MAX_WIDTH = 412 - ScreenLayout.titleX * 2;
+const SUBTITLE_MAX_WIDTH = 412 - ScreenLayout.subtitleX * 2;
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -84,124 +155,74 @@ function getSeasonGalaxy(): string {
   return '겨울';
 }
 
-function detectMissingTags(text: string): (keyof Tags)[] {
-  const missing: (keyof Tags)[] = [];
-  const t = text;
-  if (!/(친구|가족|동기|선배|후배|혼자|혼자서|동료|누구|함께|같이)/.test(t)) missing.push('together');
-  if (!/(에서|에서의|카페|집|학교|공원|식당|도서관|어디|장소|곳)/.test(t)) missing.push('place');
-  if (!/(아침|점심|저녁|밤|새벽|오전|오후|언제|시간)/.test(t)) missing.push('time');
-  if (!/(먹|마시|갔|했|봤|만났|걸었|달렸|공부|일|놀|쉬)/.test(t)) missing.push('activity');
-  if (!/(좋았|행복|슬프|기뻤|설렜|외로|피곤|시원|따뜻|즐거|감사|뿌듯|화가|속상)/.test(t)) {
-    missing.push('emotion');
-  }
-  return missing;
+function splitTagValues(raw: string): string[] {
+  const parts = raw
+    .split(/[,，、\n]/)
+    .map((part) => sanitizeTag(part))
+    .filter((part) => part.length > 0);
+  return parts;
 }
 
-function parseTags(baseText: string, supplementText: string, _missing: (keyof Tags)[]): Tags {
-  const tags: Tags = {
-    together: '대학 동기',
-    place: '부산대학교 넉넉한 터',
-    time: '늦은 밤',
-    activity: '캔맥주를 마심',
-    emotion: '시원함',
+function apiTagsToUi(tags: DailyRecordTags): Tags {
+  const clean = sanitizeDailyRecordTags(tags);
+  return {
+    together: (clean.PERSON ?? []).join(', '),
+    place: (clean.PLACE ?? []).join(', '),
+    time: (clean.TIME ?? []).join(', '),
+    activity: (clean.ACTIVITY ?? []).join(', '),
+    emotion: (clean.EMOTION ?? []).join(', '),
+  };
+}
+
+function uiTagsToApi(tags: Tags): DailyRecordTags {
+  const toValues = (value: string): string[] => {
+    const parts = splitTagValues(value).slice(0, 5);
+    return parts.length > 0 ? parts : ['미입력'];
+  };
+  return sanitizeDailyRecordTags({
+    PERSON: toValues(tags.together),
+    PLACE: toValues(tags.place),
+    ACTIVITY: toValues(tags.activity),
+    TIME: toValues(tags.time),
+    EMOTION: toValues(tags.emotion),
+  });
+}
+
+/** 보완 답변을 비어 있는 차원에 반영 */
+function mergeSupplementAnswer(
+  tags: DailyRecordTags,
+  missingQuestions: MissingQuestion[],
+  answer: string,
+): DailyRecordTags {
+  const trimmed = sanitizeTag(answer);
+  const base = sanitizeDailyRecordTags(tags);
+  const next: DailyRecordTags = {
+    PERSON: [...(base.PERSON ?? [])],
+    PLACE: [...(base.PLACE ?? [])],
+    ACTIVITY: [...(base.ACTIVITY ?? [])],
+    TIME: [...(base.TIME ?? [])],
+    EMOTION: [...(base.EMOTION ?? [])],
   };
 
-  const combined = `${baseText} ${supplementText}`;
+  for (const question of missingQuestions) {
+    if ((next[question.dimension] ?? []).length === 0 && trimmed) {
+      next[question.dimension] = [trimmed];
+    }
+  }
 
-  const togetherMatch = combined.match(
-    /(혼자|친구|가족|동기|선배|후배|동료|[가-힣]+(이)?와|[가-힣]+(랑)|[가-힣]+ 친구)/,
-  );
-  if (togetherMatch) tags.together = togetherMatch[0];
+  for (const dimension of DAILY_RECORD_DIMENSIONS) {
+    if ((next[dimension] ?? []).length === 0) {
+      next[dimension] = [trimmed || '미입력'];
+    }
+  }
 
-  const placeMatch = combined.match(/(카페|집|학교|공원|식당|도서관|편의점|[가-힣]+(에서))/);
-  if (placeMatch) tags.place = placeMatch[0].replace('에서', '');
-
-  const timeMatch = combined.match(/(아침|점심|저녁|밤|새벽|오전|오후)/);
-  if (timeMatch) tags.time = timeMatch[0];
-
-  const activityMatch = combined.match(/(먹었|마셨|갔다|했다|봤다|만났다|걸었다|공부했|일했|놀았|쉬었)/);
-  if (activityMatch) tags.activity = activityMatch[0].replace('다', '');
-
-  const emotionMatch = combined.match(/(좋았|행복|슬프|기뻤|설렜|외로|피곤|시원|따뜻|즐거|감사|뿌듯)/);
-  if (emotionMatch) tags.emotion = emotionMatch[0];
-
-  return tags;
+  return sanitizeDailyRecordTags(next);
 }
 
-// ─── StarBackground ────────────────────────────────────────────────────────
-
-function TwinkleStar({
-  star,
-  canvasWidth,
-  canvasHeight,
-}: {
-  star: BgStar;
-  canvasWidth: number;
-  canvasHeight: number;
-}) {
-  const opacity = useRef(new Animated.Value(0.3)).current;
-
-  useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.delay(star.delay * 1000),
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: (star.dur * 1000) / 2,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0.2,
-          duration: (star.dur * 1000) / 2,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    animation.start();
-    return () => animation.stop();
-  }, [opacity, star.delay, star.dur]);
-
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        styles.twinkleStar,
-        {
-          left: (star.x / 100) * canvasWidth,
-          top: (star.y / 100) * canvasHeight,
-          width: star.size,
-          height: star.size,
-          borderRadius: star.size / 2,
-          opacity,
-        },
-      ]}
-    />
-  );
-}
-
-function StarBackground({ count = 70 }: { count?: number }) {
-  const { width, height } = useWindowDimensions();
-  const stars = useMemo<BgStar[]>(
-    () =>
-      Array.from({ length: count }, (_, i) => ({
-        id: i,
-        x: Math.random() * 100,
-        y: Math.random() * 100,
-        size: Math.random() * 1.5 + 0.5,
-        delay: Math.random() * 4,
-        dur: Math.random() * 2 + 2,
-      })),
-    [count],
-  );
-
-  return (
-    <View style={[styles.starBg, { width, height }]} pointerEvents="none">
-      {stars.map((s) => (
-        <TwinkleStar key={s.id} star={s} canvasWidth={width} canvasHeight={height} />
-      ))}
-    </View>
+function showProcessError() {
+  Alert.alert(
+    '알림',
+    'AI 분석 응답이 지연되었습니다. 잠시 후 다시 시도해 주세요.',
   );
 }
 
@@ -209,14 +230,30 @@ function StarBackground({ count = 70 }: { count?: number }) {
 
 function BackChevron() {
   return (
-    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
       <Path
         d="M15 19l-7-7 7-7"
-        stroke="rgba(255,255,255,0.8)"
+        stroke="rgba(248,238,193,0.8)"
         strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </Svg>
+  );
+}
+
+function WarningIcon() {
+  return (
+    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 3L22 20H2L12 3Z"
+        stroke="#F8EEC1"
+        strokeWidth={1.6}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      <Path d="M12 10v4" stroke="#F8EEC1" strokeWidth={1.6} strokeLinecap="round" />
+      <Path d="M12 16.6v.01" stroke="#F8EEC1" strokeWidth={1.8} strokeLinecap="round" />
     </Svg>
   );
 }
@@ -334,7 +371,27 @@ function PurpleStarIcon({ size = 48 }: { size?: number }) {
   );
 }
 
-// ─── Shared UI ─────────────────────────────────────────────────────────────
+// ─── Shared chrome ─────────────────────────────────────────────────────────
+
+function StarCreateHeader({ onBack }: { onBack: () => void }) {
+  return (
+    <View style={styles.chromeHeaderWrap}>
+      <View style={styles.chromeHeaderRow}>
+        <TouchableOpacity
+          onPress={onBack}
+          style={styles.chromeHeaderBack}
+          activeOpacity={0.7}
+          hitSlop={8}
+          accessibilityLabel="뒤로가기"
+        >
+          <BackChevron />
+        </TouchableOpacity>
+        <AppText style={styles.chromeHeaderTitle}>별 생성하기</AppText>
+      </View>
+      <View style={styles.chromeHeaderDivider} />
+    </View>
+  );
+}
 
 function BackButton({ onPress }: { onPress: () => void }) {
   return (
@@ -368,7 +425,7 @@ function BottomButton({
       <LinearGradient
         colors={
           disabled
-            ? ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.08)']
+            ? ['rgba(248,238,193,0.12)', 'rgba(248,238,193,0.08)']
             : ['rgba(40,50,90,0.95)', 'rgba(25,35,70,0.98)']
         }
         start={{ x: 0, y: 0 }}
@@ -383,7 +440,7 @@ function BottomButton({
   );
 }
 
-// ─── Screen 1: Base ────────────────────────────────────────────────────────
+// ─── STATE 1: Base ─────────────────────────────────────────────────────────
 
 function BaseScreen({
   onNext,
@@ -392,108 +449,192 @@ function BaseScreen({
   onNext: (text: string) => void;
   onBack: () => void;
 }) {
+  const { width, height } = useWindowDimensions();
+  const { x, y } = scaleDesign(width, height);
   const [text, setText] = useState('');
+  const [showError, setShowError] = useState(false);
+
+  const handleChange = (value: string) => {
+    setText(value);
+    if (showError && value.trim().length > 0) setShowError(false);
+  };
+
+  const handleSubmit = () => {
+    if (text.trim().length === 0) {
+      setShowError(true);
+      return;
+    }
+    onNext(text);
+  };
 
   return (
-    <View style={styles.screenCol}>
-      <View style={styles.headerRow}>
-        <BackButton onPress={onBack} />
-      </View>
+    <View style={styles.flexFill}>
+      <StarCreateHeader onBack={onBack} />
 
-      <View style={styles.centerBody}>
-        <Text style={styles.title}>오늘의 관측을 기록해보세요.</Text>
-        <Text style={styles.subtitle}>
-          짧게, 2~3문장도 괜찮아요.{'\n'}한 줄의 기록도 하나의 별이 됩니다.
-        </Text>
-        <TextInput
-          value={text}
-          onChangeText={setText}
-          placeholder="오늘 하루를 기록해보세요..."
-          placeholderTextColor="rgba(255,255,255,0.3)"
-          multiline
-          textAlignVertical="top"
-          style={styles.textArea}
-        />
-      </View>
+      <AppText
+        variant="emphasis"
+        style={{
+          ...styles.baseTitle,
+          left: x(ScreenLayout.titleX),
+          top: y(ScreenLayout.titleY),
+          width: x(TITLE_MAX_WIDTH),
+        }}
+      >
+        오늘의 관측을 기록해보세요.
+      </AppText>
 
-      <View style={styles.footer}>
-        <BottomButton label="분석하기" onPress={() => onNext(text)} />
-      </View>
+      <AppText
+        style={{
+          ...styles.baseSubtitle,
+          left: x(ScreenLayout.subtitleX),
+          top: y(ScreenLayout.subtitleY),
+          width: x(SUBTITLE_MAX_WIDTH),
+        }}
+      >
+        {'짧게, 2-3문장도 괜찮아요.\n한 줄의 기록도 하나의 별이 됩니다.'}
+      </AppText>
+
+      <TextInput
+        value={text}
+        onChangeText={handleChange}
+        placeholder="오늘 하루를 기록해보세요..."
+        placeholderTextColor="rgba(248,238,193,0.6)"
+        multiline
+        textAlignVertical="top"
+        style={[
+          styles.textArea,
+          {
+            left: x(ScreenLayout.textAreaX),
+            top: y(ScreenLayout.textAreaY),
+            width: x(ScreenLayout.textAreaWidth),
+            height: y(ScreenLayout.textAreaHeight),
+            textAlignVertical: 'top',
+          },
+        ]}
+      />
+
+      {showError && (
+        <View
+          style={[
+            styles.errorRow,
+            {
+              left: x(ScreenLayout.textAreaX),
+              top: y(ScreenLayout.textAreaY) + y(ScreenLayout.textAreaHeight) + 10,
+              width: x(ScreenLayout.textAreaWidth),
+            },
+          ]}
+        >
+          <WarningIcon />
+          <AppText style={styles.errorText}>내용을 입력해주세요.</AppText>
+        </View>
+      )}
+
+      <PrimaryButton label="기록 분석하기" pinnedToLargeTop onPress={handleSubmit} />
     </View>
   );
 }
 
-// ─── Screen 2: Loading ─────────────────────────────────────────────────────
+// ─── STATE 2: Supplement ────────────────────────────────────────────────────
 
-function LoadingScreen() {
-  return (
-    <View style={styles.centeredScreen}>
-      <ActivityIndicator size="large" color={COLORS.purpleSoft} />
-      <Text style={styles.loadingText}>Solar AI가 오늘 하루의 조각을 분석하고 있어요...</Text>
-    </View>
-  );
-}
-
-// ─── Screen 3: Supplement ──────────────────────────────────────────────────
+/** 하루 기록 화면 서브카피(y:300) ↔ 텍스트창(y:370) 간격의 절반 — 디자인 px */
+const SUPPLEMENT_BLOCK_GAP = (ScreenLayout.textAreaY - ScreenLayout.subtitleY) / 2; // 35
 
 function SupplementScreen({
-  missingTags,
+  missingQuestions,
   onNext,
   onBack,
+  submitting,
 }: {
-  missingTags: (keyof Tags)[];
+  missingQuestions: MissingQuestion[];
   onNext: (text: string) => void;
   onBack: () => void;
+  submitting?: boolean;
 }) {
+  const { width, height } = useWindowDimensions();
+  const { x, y } = scaleDesign(width, height);
   const [text, setText] = useState('');
-  const questions = REQUIRED_TAGS.filter((t) => missingTags.includes(t.key));
+  const [titleBottom, setTitleBottom] = useState(0);
+  const [questionsBottom, setQuestionsBottom] = useState(0);
+
+  const blockGap = y(SUPPLEMENT_BLOCK_GAP);
+  const titleTop = y(ScreenLayout.titleY);
+  const questionsTop =
+    titleBottom > 0 ? titleBottom + y(12) : y(ScreenLayout.subtitleY);
+  const textAreaTop =
+    questionsBottom > 0
+      ? questionsBottom + blockGap
+      : y(ScreenLayout.textAreaY);
+  /** 버튼(y:820)과 겹치지 않도록 텍스트창 하단 여유 */
+  const maxTextAreaTop = y(ScreenLayout.largeButtonTop) - y(ScreenLayout.textAreaHeight) - y(24);
+  const clampedTextAreaTop = Math.min(textAreaTop, maxTextAreaTop);
 
   return (
-    <View style={styles.screenCol}>
-      <View style={styles.headerRow}>
-        <BackButton onPress={onBack} />
-      </View>
+    <View style={styles.flexFill}>
+      <StarCreateHeader onBack={onBack} />
 
-      <ScrollView
-        style={styles.flex}
-        contentContainerStyle={styles.scrollPad}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <AppText
+        variant="emphasis"
+        onLayout={(e) => {
+          const { y: layoutY, height: layoutH } = e.nativeEvent.layout;
+          setTitleBottom(layoutY + layoutH);
+        }}
+        style={{
+          ...styles.baseTitle,
+          left: x(ScreenLayout.titleX),
+          top: titleTop,
+          width: x(TITLE_MAX_WIDTH),
+        }}
       >
-        <Text style={styles.title}>
-          더 정확한 별을 남기기 위해 아래 내용을 보완해 보세요.
-        </Text>
-        <Text style={styles.subtitle}>
-          더 정확한 별을 만들기 위해{'\n'}조금만 더 알려주세요.
-        </Text>
+        {'더 정확한 별을 남기기 위해\n아래 내용을 보완해 보세요.'}
+      </AppText>
 
-        <View style={styles.questionList}>
-          {questions.map((q) => (
-            <View key={q.key} style={styles.questionRow}>
-              <Text style={styles.questionDash}>-</Text>
-              <Text style={styles.questionText}>{q.question}</Text>
-            </View>
-          ))}
-        </View>
-
-        <TextInput
-          value={text}
-          onChangeText={setText}
-          placeholder="자유롭게 작성해보세요..."
-          placeholderTextColor="rgba(255,255,255,0.3)"
-          multiline
-          textAlignVertical="top"
-          style={styles.textArea}
-        />
-      </ScrollView>
-
-      <View style={styles.footer}>
-        <BottomButton
-          label="다음으로"
-          onPress={() => onNext(text)}
-          disabled={text.trim().length < 2}
-        />
+      <View
+        style={[
+          styles.supplementQuestionList,
+          {
+            left: x(ScreenLayout.subtitleX),
+            top: questionsTop,
+            width: x(SUBTITLE_MAX_WIDTH),
+          },
+        ]}
+        onLayout={(e) => {
+          const { y: layoutY, height: layoutH } = e.nativeEvent.layout;
+          setQuestionsBottom(layoutY + layoutH);
+        }}
+      >
+        {missingQuestions.map((q) => (
+          <AppText key={q.dimension} style={styles.supplementQuestion}>
+            {q.question}
+          </AppText>
+        ))}
       </View>
+
+      <TextInput
+        value={text}
+        onChangeText={setText}
+        placeholder="자유롭게 작성해보세요..."
+        placeholderTextColor="rgba(248,238,193,0.6)"
+        multiline
+        textAlignVertical="top"
+        editable={!submitting}
+        style={[
+          styles.textArea,
+          {
+            left: x(ScreenLayout.textAreaX),
+            top: clampedTextAreaTop,
+            width: x(ScreenLayout.textAreaWidth),
+            height: y(ScreenLayout.textAreaHeight),
+            textAlignVertical: 'top',
+          },
+        ]}
+      />
+
+      <PrimaryButton
+        label="확인"
+        pinnedToLargeTop
+        disabled={submitting || text.trim().length === 0}
+        onPress={() => onNext(text)}
+      />
     </View>
   );
 }
@@ -521,128 +662,148 @@ function TagEditModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <Pressable style={styles.modalCard} onPress={() => undefined}>
-          <LinearGradient colors={['#1a2a50', '#0f1e3d']} style={styles.modalCardInner}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{tagLabel}를 수정해주세요.</Text>
-              <TouchableOpacity onPress={onClose} hitSlop={8} activeOpacity={0.7}>
-                <CloseIcon />
-              </TouchableOpacity>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <Pressable style={styles.modalOverlay} onPress={onClose}>
+          <Pressable style={styles.modalCard} onPress={() => undefined}>
+            <View style={styles.modalCardInner}>
+              <View style={styles.modalHeader}>
+                <AppText style={styles.modalTitle}>{tagLabel}를 수정해주세요.</AppText>
+                <TouchableOpacity onPress={onClose} hitSlop={8} activeOpacity={0.7}>
+                  <CloseIcon />
+                </TouchableOpacity>
+              </View>
+
+              <TextInput
+                value={value}
+                onChangeText={setValue}
+                autoFocus
+                textAlignVertical="top"
+                style={styles.modalInput}
+                placeholderTextColor="rgba(248,238,193,0.6)"
+              />
+
+              <PrimaryButton
+                label="수정 완료"
+                pinnedToLargeTop={false}
+                style={styles.modalPrimaryButton}
+                onPress={() => {
+                  onSave(value.trim() || currentValue);
+                  onClose();
+                }}
+              />
             </View>
-
-            <TextInput
-              value={value}
-              onChangeText={setValue}
-              autoFocus
-              style={styles.modalInput}
-              placeholderTextColor="rgba(255,255,255,0.3)"
-            />
-
-            <BottomButton
-              label="수정 완료"
-              onPress={() => {
-                onSave(value.trim() || currentValue);
-                onClose();
-              }}
-            />
-          </LinearGradient>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
-// ─── Screen 4: Confirm ─────────────────────────────────────────────────────
+// ─── STATE 3: Confirm ──────────────────────────────────────────────────────
 
 function ConfirmScreen({
   tags: initialTags,
   cluster,
-  baseText,
+  clusterId,
   onCycleCluster,
   onNext,
   onBack,
+  submitting,
 }: {
   tags: Tags;
   cluster: string;
-  baseText: string;
+  clusterId: ClusterIndex;
   onCycleCluster: () => void;
-  onNext: () => void;
+  onNext: (tags: Tags) => void;
   onBack: () => void;
+  submitting?: boolean;
 }) {
+  const { width, height } = useWindowDimensions();
+  const { y } = scaleDesign(width, height);
   const [tags, setTags] = useState<Tags>(initialTags);
   const [editingKey, setEditingKey] = useState<keyof Tags | null>(null);
 
-  const rows: { key: keyof Tags; icon: string; label: string }[] = [
-    { key: 'together', icon: '👤', label: '함께한 사람' },
-    { key: 'place', icon: '📍', label: '장소' },
-    { key: 'time', icon: '🕐', label: '시간' },
-    { key: 'activity', icon: '🚶', label: '활동' },
-    { key: 'emotion', icon: '💜', label: '감정' },
-  ];
+  const rows: { key: keyof Tags; label: string }[] = TAG_META.map((meta) => ({
+    key: meta.key,
+    label: meta.label,
+  }));
 
   const editingRow = rows.find((r) => r.key === editingKey);
 
   return (
-    <View style={styles.screenCol}>
-      <View style={styles.headerRow}>
-        <BackButton onPress={onBack} />
-      </View>
+    <View style={styles.flexFill}>
+      <StarCreateHeader onBack={onBack} />
 
       <ScrollView
         style={styles.flex}
-        contentContainerStyle={styles.scrollPad}
+        contentContainerStyle={styles.confirmScrollPad}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.title}>관측을 완료했어요.</Text>
-        <Text style={[styles.subtitle, styles.subtitleTight]}>
+        <AppText variant="emphasis" style={styles.confirmTitle}>
+          관측을 완료했어요.
+        </AppText>
+        <AppText style={styles.confirmSubtitle}>
           기록을 바탕으로 별의 특징을 분석했어요.
-        </Text>
+        </AppText>
 
         <TouchableOpacity
           style={styles.clusterBlock}
           onPress={onCycleCluster}
           activeOpacity={0.75}
+          disabled={submitting}
         >
-          <PurpleStarIcon size={44} />
-          <Text style={styles.clusterName}>{cluster}</Text>
-          <Text style={styles.clusterHint}>탭하여 성단을 변경할 수 있어요</Text>
+          <ClusterIcon cluster={clusterId} label={cluster} iconSize={52} />
+          <AppText style={styles.clusterHint}>탭하여 성단을 변경할 수 있어요</AppText>
         </TouchableOpacity>
 
         <View style={styles.tagList}>
           {rows.map((r) => {
             const isActive = editingKey === r.key;
             return (
-              <View key={r.key} style={styles.tagRow}>
-                <Text style={styles.tagIcon}>{r.icon}</Text>
-                <Text style={styles.tagLabel}>{r.label}</Text>
-                <Text style={styles.tagValue} numberOfLines={2}>
+              <View
+                key={r.key}
+                style={[
+                  styles.tagRow,
+                  isActive && styles.tagRowActive,
+                ]}
+              >
+                <Image
+                  source={TAG_ICON_SOURCES[r.key]}
+                  style={styles.tagIconImage}
+                  resizeMode="contain"
+                />
+                <AppText style={styles.tagLabel}>{r.label}</AppText>
+                <AppText style={styles.tagValue} numberOfLines={2}>
                   {tags[r.key]}
-                </Text>
+                </AppText>
                 <TouchableOpacity
                   onPress={() => setEditingKey(r.key)}
                   style={styles.editBtn}
                   hitSlop={8}
                   activeOpacity={0.7}
+                  disabled={submitting}
                 >
-                  <EditIcon active={isActive} />
+                  <Image source={PEN_ICON} style={styles.penIcon} resizeMode="contain" />
                 </TouchableOpacity>
               </View>
             );
           })}
         </View>
 
-        <View style={styles.originalCard}>
-          <Text style={styles.originalLabel}>원문</Text>
-          <Text style={styles.originalText} numberOfLines={3}>
-            {baseText}
-          </Text>
-        </View>
+        {/* PrimaryButton absolute pin 여유 */}
+        <View style={{ height: y(ScreenLayout.largeButtonHeight) + y(40) }} />
       </ScrollView>
 
-      <View style={styles.footer}>
-        <BottomButton label="이대로 별 남기기" onPress={onNext} />
-      </View>
+      <PrimaryButton
+        label="별 생성하기"
+        pinnedToLargeTop
+        disabled={submitting}
+        onPress={() => onNext(tags)}
+      />
 
       {editingRow && editingKey && (
         <TagEditModal
@@ -657,7 +818,7 @@ function ConfirmScreen({
   );
 }
 
-// ─── Screen 5: Complete ────────────────────────────────────────────────────
+// ─── STATE 4: Complete ─────────────────────────────────────────────────────
 
 function CompleteScreen({
   cluster,
@@ -666,7 +827,7 @@ function CompleteScreen({
 }: {
   cluster: string;
   starIndex: number;
-  onHome: () => void;
+  onHome: () => void | Promise<void>;
 }) {
   const now = new Date();
   const year = now.getFullYear();
@@ -695,35 +856,45 @@ function CompleteScreen({
   }, [fadeIn, slideUp]);
 
   return (
-    <View style={styles.screenCol}>
+    <SafeAreaView style={styles.confirmScreenCol} edges={['top', 'bottom']}>
       <Animated.View
         style={[
           styles.completeCenter,
           { opacity: fadeIn, transform: [{ translateY: slideUp }] },
         ]}
       >
-        <View style={styles.completeStarWrap}>
-          <View style={styles.starGlow} />
-          <StarIcon size={56} animated />
-        </View>
+        <AppText variant="emphasis" style={styles.confirmTitle}>
+          새로운 별이 탄생했어요!
+        </AppText>
+        <AppText style={styles.confirmSubtitle}>
+          오늘의 빛이 은하에 기록되었어요.
+        </AppText>
 
-        <Text style={styles.completeTitle}>새로운 별이 탄생했어요!</Text>
-        <Text style={styles.completeSubtitle}>오늘의 빛이 은하에 기록되었어요.</Text>
+        <Image
+          source={COMPLETE_STAR_IMAGE}
+          style={styles.completeStarImage}
+          resizeMode="contain"
+        />
 
-        <View style={styles.metaCard}>
-          <Text style={styles.metaLine}>
-            {year}년 {month}월 {day}일
-          </Text>
-          <Text style={styles.metaLine}>{season}의 은하</Text>
-          <Text style={styles.metaEmphasis}>
-            {cluster} 성단의 {starIndex}번째 별
-          </Text>
-        </View>
+        <AppText style={styles.completeMeta}>
+          {`${year}년 ${month}월 ${day}일\n${season}의 은하\n${cluster} 성단의 ${starIndex}번째 별`}
+        </AppText>
       </Animated.View>
 
-      <View style={styles.footer}>
-        <BottomButton label="메인으로 돌아가기" onPress={onHome} />
-      </View>
+      <PrimaryButton label="확인" pinnedToLargeTop onPress={onHome} />
+    </SafeAreaView>
+  );
+}
+
+// ─── Main View ─────────────────────────────────────────────────────────────
+
+// ─── Loading ───────────────────────────────────────────────────────────────
+
+function LoadingScreen({ message }: { message: string }) {
+  return (
+    <View style={styles.loadingCenter}>
+      <ActivityIndicator color="#FFF9DD" size="large" />
+      <AppText style={styles.loadingText}>{message}</AppText>
     </View>
   );
 }
@@ -732,92 +903,228 @@ function CompleteScreen({
 
 export default function StarRecordView() {
   const router = useRouter();
+  const { width, height } = useWindowDimensions();
   const [screen, setScreen] = useState<Screen>('base');
-  const [baseText, setBaseText] = useState('');
-  const [missingTags, setMissingTags] = useState<(keyof Tags)[]>([]);
-  const [tags, setTags] = useState<Tags | null>(null);
-  const [clusterIndex, setClusterIndex] = useState(
-    () => Math.floor(Math.random() * CLUSTER_NAMES.length),
-  );
-  const [starIndex] = useState(() => Math.floor(Math.random() * 12) + 1);
-  const cluster = CLUSTER_NAMES[clusterIndex];
+  const [loadingMessage, setLoadingMessage] = useState('빛의 속도로 분석하는 중...');
+  const [analysisId, setAnalysisId] = useState<string | null>(null);
+  const [apiTags, setApiTags] = useState<DailyRecordTags | null>(null);
+  const [missingQuestions, setMissingQuestions] = useState<MissingQuestion[]>([]);
+  /** 온보딩에서 선택한 성단 이름 목록 (선택 순서 = 성단 1~5) */
+  const [userClusters, setUserClusters] = useState<string[]>([]);
+  const [primaryCategory, setPrimaryCategory] = useState<string>('');
+  const [starIndex, setStarIndex] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (screen !== 'loading') return;
-    const timer = setTimeout(() => {
-      const missing = detectMissingTags(baseText);
-      if (missing.length >= 1) {
-        setMissingTags(missing);
-        setScreen('supplement');
-      } else {
-        const parsed = parseTags(baseText, '', missing);
-        setTags(parsed);
-        setScreen('confirm');
+    let cancelled = false;
+    (async () => {
+      try {
+        const status = await getOnboardingStatus();
+        const categories = status.north_star?.selected_categories ?? [];
+        if (!cancelled && categories.length > 0) {
+          setUserClusters(categories);
+          setPrimaryCategory((prev) => prev || categories[0]);
+        }
+      } catch (error) {
+        console.error('Onboarding clusters load error:', error);
       }
-    }, LOADING_MS);
-    return () => clearTimeout(timer);
-  }, [screen, baseText]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const handleBaseNext = (text: string) => {
-    setBaseText(text);
+  const clusterId = userClusterToIconIndex(primaryCategory, userClusters);
+  const uiTags = apiTags ? apiTagsToUi(apiTags) : null;
+
+  const goToConfirmWithDetails = async (
+    id: string,
+    tags: DailyRecordTags,
+    clusters: string[] = userClusters,
+  ): Promise<boolean> => {
+    setLoadingMessage('별의 특징을 정리하는 중...');
     setScreen('loading');
+    try {
+      const details = await updateDailyRecordDetails(id, tags);
+      setApiTags(sanitizeDailyRecordTags(details.tags));
+      setPrimaryCategory(
+        resolveInitialUserCluster(
+          details.primary_category,
+          details.category_ranking ?? [],
+          clusters,
+        ),
+      );
+      setScreen('confirm');
+      return true;
+    } catch (error) {
+      console.error('Daily record details error:', error);
+      showProcessError();
+      return false;
+    }
   };
 
-  const handleSupplementNext = (text: string) => {
-    const parsed = parseTags(baseText, text, missingTags);
-    setTags(parsed);
-    setScreen('confirm');
+  const handleBaseNext = async (text: string) => {
+    if (submitting) return;
+    setSubmitting(true);
+    setLoadingMessage('빛의 속도로 분석하는 중...');
+    setScreen('loading');
+    try {
+      // 온보딩 선택 성단이 아직 없으면 한 번 더 로드
+      let clusters = userClusters;
+      if (clusters.length === 0) {
+        try {
+          const status = await getOnboardingStatus();
+          clusters = status.north_star?.selected_categories ?? [];
+          if (clusters.length > 0) setUserClusters(clusters);
+        } catch (error) {
+          console.error('Onboarding clusters load error:', error);
+        }
+      }
+
+      const data = await analyzeDailyRecord(text);
+      const cleanedTags = sanitizeDailyRecordTags(data.tags);
+      setAnalysisId(data.analysis_id);
+      setApiTags(cleanedTags);
+      setMissingQuestions(data.missing_questions ?? []);
+
+      if ((data.missing_questions ?? []).length > 0) {
+        setScreen('supplement');
+        return;
+      }
+
+      const ok = await goToConfirmWithDetails(
+        data.analysis_id,
+        cleanedTags,
+        clusters,
+      );
+      if (!ok) setScreen('base');
+    } catch (error) {
+      console.error('Daily record analyze error:', error);
+      showProcessError();
+      setScreen('base');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSupplementNext = async (answer: string) => {
+    if (!analysisId || !apiTags || submitting) return;
+    if (answer.trim().length === 0) {
+      Alert.alert('알림', '내용을 입력해주세요.');
+      return;
+    }
+
+    setSubmitting(true);
+    const merged = mergeSupplementAnswer(apiTags, missingQuestions, answer);
+    setApiTags(merged);
+    const ok = await goToConfirmWithDetails(analysisId, merged, userClusters);
+    if (!ok) setScreen('supplement');
+    setSubmitting(false);
   };
 
   const handleCycleCluster = () => {
-    setClusterIndex((i) => (i + 1) % CLUSTER_NAMES.length);
+    setPrimaryCategory((prev) => nextUserCluster(prev, userClusters));
   };
 
-  const handleConfirmNext = () => {
-    setScreen('complete');
+  const handleConfirmNext = async (editedTags: Tags) => {
+    if (!analysisId || submitting) return;
+    setSubmitting(true);
+    setLoadingMessage('별을 생성하는 중...');
+    setScreen('loading');
+
+    try {
+      const tagsPayload = uiTagsToApi(editedTags);
+      const details = await updateDailyRecordDetails(analysisId, tagsPayload);
+      setApiTags(sanitizeDailyRecordTags(details.tags));
+
+      // 사용자가 순환 선택한 성단 이름 → confirm primary_category
+      const selectedCategory =
+        (userClusters.includes(primaryCategory)
+          ? primaryCategory
+          : resolveInitialUserCluster(
+              details.primary_category,
+              details.category_ranking ?? [],
+              userClusters,
+            )) || details.primary_category;
+
+      await confirmDailyRecord(analysisId, selectedCategory);
+      setPrimaryCategory(selectedCategory);
+
+      try {
+        const home = await getHome();
+        const constellation = home.constellations.find(
+          (item) => item.category === selectedCategory,
+        );
+        setStarIndex(constellation?.star_count ?? 1);
+      } catch (homeError) {
+        console.error('Home sync error:', homeError);
+        setStarIndex(1);
+      }
+
+      setScreen('complete');
+    } catch (error) {
+      console.error('Daily record confirm error:', error);
+      showProcessError();
+      setScreen('confirm');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleHome = () => {
-    router.replace('/');
+  const handleHome = async () => {
+    try {
+      await getHome();
+    } catch (error) {
+      console.error('Home refetch error:', error);
+    } finally {
+      router.replace('/');
+    }
   };
 
   return (
-    <View style={styles.root}>
-      <LinearGradient
-        colors={[COLORS.bgTop, COLORS.bgMid, COLORS.bg]}
-        locations={[0, 0.4, 1]}
-        style={StyleSheet.absoluteFill}
-      />
-      <StarBackground count={70} />
+    <View style={[styles.root, { width, height }]}>
+      <Background width={width} height={height} />
 
-      <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
-        <View style={styles.shell}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScreenContainer withTopPadding={false} withHorizontalPadding={false}>
           {screen === 'base' && (
             <BaseScreen onNext={handleBaseNext} onBack={() => router.back()} />
           )}
-          {screen === 'loading' && <LoadingScreen />}
+          {screen === 'loading' && <LoadingScreen message={loadingMessage} />}
           {screen === 'supplement' && (
             <SupplementScreen
-              missingTags={missingTags}
+              missingQuestions={missingQuestions}
               onNext={handleSupplementNext}
               onBack={() => setScreen('base')}
+              submitting={submitting}
             />
           )}
-          {screen === 'confirm' && tags && (
+          {screen === 'confirm' && uiTags && (
             <ConfirmScreen
-              tags={tags}
-              cluster={cluster}
-              baseText={baseText}
+              key={analysisId ?? 'confirm'}
+              tags={uiTags}
+              cluster={primaryCategory}
+              clusterId={clusterId}
               onCycleCluster={handleCycleCluster}
               onNext={handleConfirmNext}
-              onBack={() => setScreen(missingTags.length > 0 ? 'supplement' : 'base')}
+              onBack={() =>
+                setScreen(missingQuestions.length > 0 ? 'supplement' : 'base')
+              }
+              submitting={submitting}
             />
           )}
           {screen === 'complete' && (
-            <CompleteScreen cluster={cluster} starIndex={starIndex} onHome={handleHome} />
+            <CompleteScreen
+              cluster={primaryCategory}
+              starIndex={starIndex}
+              onHome={handleHome}
+            />
           )}
-        </View>
-      </SafeAreaView>
+        </ScreenContainer>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -827,26 +1134,125 @@ export default function StarRecordView() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: '#0A1628',
   },
   flex: {
     flex: 1,
   },
-  shell: {
+  flexFill: {
     flex: 1,
   },
-  starBg: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: 'hidden',
+  loadingCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    paddingHorizontal: 24,
   },
-  twinkleStar: {
+  loadingText: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    color: 'rgba(255,249,221,0.85)',
+    textAlign: 'center',
+  },
+
+  // ─ Shared header (STATE 1 / STATE 2) ─
+  chromeHeaderWrap: {
+    paddingTop: 8,
+  },
+  chromeHeaderRow: {
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chromeHeaderBack: {
     position: 'absolute',
-    backgroundColor: COLORS.white,
+    left: 16,
+    top: 0,
+    bottom: 0,
+    width: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
   },
-  screenCol: {
+  chromeHeaderTitle: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    color: 'rgba(248,238,193,0.6)',
+    textAlign: 'center',
+  },
+  chromeHeaderDivider: {
+    height: 1,
+    width: '92%',
+    marginHorizontal: 16,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(248,238,193,0.15)',
+  },
+
+  // ─ STATE 1: base ─
+  baseTitle: {
+    position: 'absolute',
+    fontFamily: FontFamily.bold,
+    fontSize: 18,
+    color: '#FFF9DD',
+    textAlign: 'center',
+  },
+  baseSubtitle: {
+    position: 'absolute',
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: 'rgba(255,249,221,0.8)',
+    textAlign: 'center',
+  },
+  errorRow: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  errorText: {
+    fontFamily: FontFamily.regular,
+    fontSize: 11,
+    color: '#F8EEC1',
+    textAlign: 'center',
+  },
+
+  // ─ Shared text area (STATE 1 / STATE 2) ─
+  textArea: {
+    position: 'absolute',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    color: '#FFF9DD',
+    fontFamily: FontFamily.regular,
+    fontSize: 11,
+    textAlign: 'center',
+    textAlignVertical: 'top',
+    backgroundColor: 'rgba(248,238,193,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(248,238,193,0.3)',
+  },
+
+  // ─ STATE 2: supplement ─
+  supplementQuestionList: {
+    position: 'absolute',
+    gap: 4,
+  },
+  supplementQuestion: {
+    fontFamily: FontFamily.regular,
+    fontSize: 11,
+    lineHeight: 16,
+    color: 'rgba(255,249,221,0.85)',
+    textAlign: 'center',
+  },
+
+  // ─ STATE 3 / 4: confirm & complete chrome ─
+  confirmScreenCol: {
     flex: 1,
   },
-  headerRow: {
+  confirmHeaderRow: {
     paddingHorizontal: 20,
     paddingTop: 4,
     flexShrink: 0,
@@ -857,53 +1263,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  centerBody: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  centeredScreen: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    gap: 20,
-  },
   scrollPad: {
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: 16,
-  },
-  title: {
-    color: COLORS.white,
-    fontSize: 22,
-    lineHeight: 32,
-    fontWeight: '600',
-    marginBottom: 8,
-    alignSelf: 'stretch',
-  },
-  subtitle: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 13,
-    lineHeight: 20,
-    marginBottom: 24,
-    alignSelf: 'stretch',
-  },
-  subtitleTight: {
-    marginBottom: 20,
-  },
-  textArea: {
-    width: '100%',
-    minHeight: 140,
-    borderRadius: 16,
-    padding: 16,
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 14,
-    lineHeight: 22,
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
   },
   footer: {
     paddingHorizontal: 24,
@@ -916,10 +1279,10 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: 'rgba(248,238,193,0.25)',
   },
   bottomButtonDisabled: {
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(248,238,193,0.1)',
   },
   bottomButtonGradient: {
     paddingVertical: 16,
@@ -935,72 +1298,82 @@ const styles = StyleSheet.create({
   bottomButtonTextDisabled: {
     color: 'rgba(255,255,255,0.35)',
   },
-  loadingText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 14,
-    letterSpacing: 0.3,
+  // ─ STATE 3: confirm ─
+  confirmScrollPad: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 24,
+  },
+  confirmTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: 18,
+    color: '#FFF9DD',
     textAlign: 'center',
-    lineHeight: 22,
-    paddingHorizontal: 16,
+    marginBottom: 12,
+    alignSelf: 'stretch',
   },
-  questionList: {
-    marginBottom: 16,
-    gap: 8,
-  },
-  questionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  questionDash: {
-    color: 'rgba(255,255,255,0.3)',
-    fontSize: 12,
-  },
-  questionText: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 12,
-    flex: 1,
+  confirmSubtitle: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: 'rgba(255,249,221,0.8)',
+    textAlign: 'center',
+    marginBottom: 20,
+    alignSelf: 'stretch',
   },
   clusterBlock: {
     alignItems: 'center',
     marginBottom: 20,
   },
   clusterName: {
-    color: 'rgba(255,255,255,0.8)',
+    fontFamily: FontFamily.regular,
+    color: 'rgba(255,249,221,0.85)',
     fontSize: 14,
-    fontWeight: '500',
     marginTop: 8,
+    textAlign: 'center',
   },
   clusterHint: {
-    color: 'rgba(255,255,255,0.35)',
+    fontFamily: FontFamily.regular,
+    color: 'rgba(248,238,193,0.45)',
     fontSize: 12,
     marginTop: 4,
+    textAlign: 'center',
   },
   tagList: {
     gap: 8,
     marginBottom: 20,
+    width: '100%',
   },
   tagRow: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: COLORS.card,
+    backgroundColor: Colors.button.fill,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: Colors.tag.borderInactive,
   },
-  tagIcon: {
-    fontSize: 16,
-    marginRight: 12,
+  tagRowActive: {
+    backgroundColor: Colors.button.fill,
+    borderColor: Colors.tag.borderActive,
+    borderWidth: 2,
+  },
+  tagIconImage: {
+    width: 20,
+    height: 20,
+    marginRight: 10,
   },
   tagLabel: {
-    color: 'rgba(255,255,255,0.4)',
+    fontFamily: FontFamily.regular,
+    color: Colors.text.tag,
     fontSize: 12,
     width: 80,
+    opacity: 0.7,
   },
   tagValue: {
-    color: 'rgba(255,255,255,0.85)',
+    fontFamily: FontFamily.regular,
+    color: Colors.text.tag,
     fontSize: 14,
     flex: 1,
   },
@@ -1008,24 +1381,9 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     padding: 4,
   },
-  originalCard: {
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
-    marginBottom: 8,
-  },
-  originalLabel: {
-    color: 'rgba(255,255,255,0.35)',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  originalText: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 12,
-    lineHeight: 18,
+  penIcon: {
+    width: 28,
+    height: 28,
   },
   modalOverlay: {
     flex: 1,
@@ -1039,10 +1397,11 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(248,238,193,0.3)',
+    backgroundColor: '#0f1e3d',
   },
   modalCardInner: {
-    paddingHorizontal: 24,
+    paddingHorizontal: ScreenLayout.horizontal,
     paddingTop: 24,
     paddingBottom: 24,
     gap: 20,
@@ -1053,72 +1412,48 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   modalTitle: {
-    color: COLORS.white,
+    fontFamily: FontFamily.bold,
+    color: '#F8EEC1',
     fontSize: 16,
-    fontWeight: '600',
     flex: 1,
     paddingRight: 12,
   },
   modalInput: {
     width: '100%',
-    borderRadius: 12,
+    minHeight: 48,
+    borderRadius: 14,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    color: 'rgba(255,255,255,0.9)',
+    paddingVertical: 14,
+    color: '#FFF9DD',
+    fontFamily: FontFamily.regular,
     fontSize: 14,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: Colors.button.fill,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: 'rgba(248,238,193,0.6)',
+  },
+  modalPrimaryButton: {
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 372,
   },
   completeCenter: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
-    gap: 8,
   },
-  completeStarWrap: {
-    marginBottom: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+  completeStarImage: {
+    width: 160,
+    height: 160,
+    marginTop: 8,
+    marginBottom: 24,
   },
-  starGlow: {
-    position: 'absolute',
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: 'rgba(240,192,64,0.18)',
-  },
-  completeTitle: {
-    color: COLORS.white,
-    fontSize: 22,
-    fontWeight: '700',
+  completeMeta: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: 'rgba(255,249,221,0.8)',
     textAlign: 'center',
-  },
-  completeSubtitle: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  metaCard: {
-    width: '100%',
-    borderRadius: 16,
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    backgroundColor: COLORS.card,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-  },
-  metaLine: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  metaEmphasis: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
-    fontWeight: '500',
+    alignSelf: 'stretch',
   },
 });

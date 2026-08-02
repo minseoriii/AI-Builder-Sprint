@@ -1,5 +1,5 @@
 export { Palette, Colors, withOpacity } from './colors';
-export { ScreenLayout, onboardingContentTop } from './spacing';
+export { ScreenLayout, DesignFrame, scaleDesign, onboardingContentTop } from './spacing';
 export { Radii } from './radii';
 export { FontFamily, FontSize, TextStyles } from './typography';
 
@@ -23,6 +23,11 @@ export type { BackButtonProps } from './components/BackButton';
 export { ClusterIcon } from './components/ClusterIcon';
 export type { ClusterIconProps } from './components/ClusterIcon';
 
+export { Background } from './components/Background';
+export type { BackgroundProps } from './components/Background';
+
+export { ImageAssets } from './images';
+
 export {
   CLUSTER_LABEL_COLORS,
   CLUSTER_ICON_VIEWBOX,
@@ -30,8 +35,5 @@ export {
 } from './clusters';
 export type { ClusterIndex } from './clusters';
 
-/** PNG 에셋 — 파일 추가 후 여기에 re-export */
-// export { default as ExampleIcon } from './images/example.png';
-
-/** PNG 아이콘 — 파일 추가 후 ./stars_png/index.ts 에서 re-export */
+/** PNG 아이콘 — develop stars_png 에셋 */
 export * from './stars_png';
