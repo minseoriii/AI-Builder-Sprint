@@ -17,6 +17,9 @@ export type { AppTextProps, AppTextVariant } from './components/AppText';
 export { ScreenContainer } from './components/ScreenContainer';
 export type { ScreenContainerProps } from './components/ScreenContainer';
 
+export { BackButton, BackButtonTouchable } from './components/BackButton';
+export type { BackButtonProps } from './components/BackButton';
+
 export { ClusterIcon } from './components/ClusterIcon';
 export type { ClusterIconProps } from './components/ClusterIcon';
 

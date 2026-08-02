@@ -1,13 +1,11 @@
 import { Pressable, StyleSheet, Text, TextStyle, ViewStyle } from 'react-native';
 
 import { Colors } from '../colors';
-import { Radii } from '../radii';
 import { FontFamily, FontSize } from '../typography';
 
-const TAG_WIDTH = 89;
 const TAG_HEIGHT = 40;
-const BORDER_WIDTH_INACTIVE = 1;
-const BORDER_WIDTH_ACTIVE = 2;
+const TAG_PADDING_HORIZONTAL = 14;
+const TAG_BORDER_WIDTH = 2;
 
 export interface TagButtonProps {
   label: string;
@@ -20,7 +18,7 @@ export interface TagButtonProps {
 }
 
 /**
- * 태그 버튼 (89×40, 폰트 14)
+ * 태그 버튼 (높이 40, 가로는 텍스트 길이에 맞춤)
  * - 비활성: 텍스트 F8EEC1, 외곽 F8EEC1 60%, 채우기 F8EEC1 30%
  * - 활성: 텍스트 F8EEC1 bold, 외곽 F8EEC1 2px, 채우기 F8EEC1 45%
  */
@@ -41,16 +39,15 @@ export function TagButton({
       style={({ pressed }) => [
         styles.base,
         {
-          width: TAG_WIDTH,
           height: TAG_HEIGHT,
-          borderRadius: Radii.tag,
+          borderRadius: TAG_HEIGHT / 2,
           backgroundColor: isActive
             ? Colors.tag.fillActive
             : Colors.tag.fillInactive,
           borderColor: isActive
             ? Colors.tag.borderActive
             : Colors.tag.borderInactive,
-          borderWidth: isActive ? BORDER_WIDTH_ACTIVE : BORDER_WIDTH_INACTIVE,
+          borderWidth: TAG_BORDER_WIDTH,
         },
         pressed && !disabled && styles.pressed,
         disabled && styles.disabled,
@@ -65,7 +62,6 @@ export function TagButton({
           isActive && styles.labelActive,
           textStyle,
         ]}
-        numberOfLines={1}
       >
         {label}
       </Text>
@@ -77,17 +73,22 @@ const styles = StyleSheet.create({
   base: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: TAG_PADDING_HORIZONTAL,
+    alignSelf: 'flex-start',
+    flexShrink: 0,
   },
   label: {
     fontFamily: FontFamily.regular,
     fontSize: FontSize.tag,
+    lineHeight: FontSize.tag + 6,
     color: Colors.text.tag,
     textAlign: 'center',
+    flexShrink: 0,
   },
   labelActive: {
     fontFamily: FontFamily.bold,
-    fontWeight: '700',
+    fontSize: FontSize.tag,
+    lineHeight: FontSize.tag + 6,
   },
   pressed: {
     opacity: 0.9,
@@ -98,6 +99,6 @@ const styles = StyleSheet.create({
 });
 
 export const TagButtonDimensions = {
-  width: TAG_WIDTH,
   height: TAG_HEIGHT,
+  paddingHorizontal: TAG_PADDING_HORIZONTAL,
 } as const;
