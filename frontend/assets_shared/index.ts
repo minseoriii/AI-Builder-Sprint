@@ -1,5 +1,5 @@
 export { Palette, Colors, withOpacity } from './colors';
-export { ScreenLayout } from './spacing';
+export { ScreenLayout, DesignFrame, scaleDesign } from './spacing';
 export { Radii } from './radii';
 export { FontFamily, FontSize, TextStyles } from './typography';
 

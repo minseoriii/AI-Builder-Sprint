@@ -6,3 +6,5 @@ export {
   ClusterIcon5,
   ClusterSvgIcon,
 } from './ClusterIcons';
+
+export { Background } from './Background';

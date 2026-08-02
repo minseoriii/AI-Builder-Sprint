@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   Easing,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,14 +16,22 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Defs, LinearGradient as SvgLinearGradient, Path, Stop } from 'react-native-svg';
+import Svg, { Defs, Path, Stop, LinearGradient as SvgLinearGradient } from 'react-native-svg';
+
+import {
+  AppText,
+  Background,
+  FontFamily,
+  PrimaryButton,
+  ScreenContainer,
+  ScreenLayout,
+  scaleDesign,
+} from '@/assets_shared';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
-type Screen = 'base' | 'loading' | 'supplement' | 'confirm' | 'complete';
+type Screen = 'base' | 'supplement' | 'confirm' | 'complete';
 
 interface Tags {
   together: string;
@@ -37,22 +48,10 @@ interface TagMeta {
   question: string;
 }
 
-interface BgStar {
-  id: number;
-  x: number;
-  y: number;
-  size: number;
-  delay: number;
-  dur: number;
-}
-
 // ─── Constants ─────────────────────────────────────────────────────────────
 
+/** Confirm/Complete 전용 강조 색상 (배경은 공유 Background 사용) */
 const COLORS = {
-  bg: '#0A1628',
-  bgDeep: '#060d20',
-  bgMid: '#091428',
-  bgTop: '#0e1f45',
   card: '#1E293B',
   purple: '#6366F1',
   purpleSoft: '#818cf8',
@@ -72,7 +71,9 @@ const REQUIRED_TAGS: TagMeta[] = [
 
 const CLUSTER_NAMES = ['일상', '관계·사랑', '성장·도전', '휴식·여유', '특별한 순간'];
 
-const LOADING_MS = 2000;
+/** STATE1/2 타이틀·서브카피 폭 계산용 — DesignFrame(412) 기준 좌우 대칭 여백 */
+const TITLE_MAX_WIDTH = 412 - ScreenLayout.titleX * 2;
+const SUBTITLE_MAX_WIDTH = 412 - ScreenLayout.subtitleX * 2;
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -128,95 +129,34 @@ function parseTags(baseText: string, supplementText: string, _missing: (keyof Ta
   return tags;
 }
 
-// ─── StarBackground ────────────────────────────────────────────────────────
-
-function TwinkleStar({
-  star,
-  canvasWidth,
-  canvasHeight,
-}: {
-  star: BgStar;
-  canvasWidth: number;
-  canvasHeight: number;
-}) {
-  const opacity = useRef(new Animated.Value(0.3)).current;
-
-  useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.delay(star.delay * 1000),
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: (star.dur * 1000) / 2,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0.2,
-          duration: (star.dur * 1000) / 2,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    animation.start();
-    return () => animation.stop();
-  }, [opacity, star.delay, star.dur]);
-
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        styles.twinkleStar,
-        {
-          left: (star.x / 100) * canvasWidth,
-          top: (star.y / 100) * canvasHeight,
-          width: star.size,
-          height: star.size,
-          borderRadius: star.size / 2,
-          opacity,
-        },
-      ]}
-    />
-  );
-}
-
-function StarBackground({ count = 70 }: { count?: number }) {
-  const { width, height } = useWindowDimensions();
-  const stars = useMemo<BgStar[]>(
-    () =>
-      Array.from({ length: count }, (_, i) => ({
-        id: i,
-        x: Math.random() * 100,
-        y: Math.random() * 100,
-        size: Math.random() * 1.5 + 0.5,
-        delay: Math.random() * 4,
-        dur: Math.random() * 2 + 2,
-      })),
-    [count],
-  );
-
-  return (
-    <View style={[styles.starBg, { width, height }]} pointerEvents="none">
-      {stars.map((s) => (
-        <TwinkleStar key={s.id} star={s} canvasWidth={width} canvasHeight={height} />
-      ))}
-    </View>
-  );
-}
-
 // ─── Icons ─────────────────────────────────────────────────────────────────
 
 function BackChevron() {
   return (
-    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
       <Path
         d="M15 19l-7-7 7-7"
-        stroke="rgba(255,255,255,0.8)"
+        stroke="rgba(248,238,193,0.8)"
         strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </Svg>
+  );
+}
+
+function WarningIcon() {
+  return (
+    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 3L22 20H2L12 3Z"
+        stroke="#F8EEC1"
+        strokeWidth={1.6}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      <Path d="M12 10v4" stroke="#F8EEC1" strokeWidth={1.6} strokeLinecap="round" />
+      <Path d="M12 16.6v.01" stroke="#F8EEC1" strokeWidth={1.8} strokeLinecap="round" />
     </Svg>
   );
 }
@@ -334,7 +274,27 @@ function PurpleStarIcon({ size = 48 }: { size?: number }) {
   );
 }
 
-// ─── Shared UI ─────────────────────────────────────────────────────────────
+// ─── Shared chrome ─────────────────────────────────────────────────────────
+
+function StarCreateHeader({ onBack }: { onBack: () => void }) {
+  return (
+    <View style={styles.chromeHeaderWrap}>
+      <View style={styles.chromeHeaderRow}>
+        <TouchableOpacity
+          onPress={onBack}
+          style={styles.chromeHeaderBack}
+          activeOpacity={0.7}
+          hitSlop={8}
+          accessibilityLabel="뒤로가기"
+        >
+          <BackChevron />
+        </TouchableOpacity>
+        <AppText style={styles.chromeHeaderTitle}>별 생성하기</AppText>
+      </View>
+      <View style={styles.chromeHeaderDivider} />
+    </View>
+  );
+}
 
 function BackButton({ onPress }: { onPress: () => void }) {
   return (
@@ -368,7 +328,7 @@ function BottomButton({
       <LinearGradient
         colors={
           disabled
-            ? ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.08)']
+            ? ['rgba(248,238,193,0.12)', 'rgba(248,238,193,0.08)']
             : ['rgba(40,50,90,0.95)', 'rgba(25,35,70,0.98)']
         }
         start={{ x: 0, y: 0 }}
@@ -383,7 +343,7 @@ function BottomButton({
   );
 }
 
-// ─── Screen 1: Base ────────────────────────────────────────────────────────
+// ─── STATE 1: Base ─────────────────────────────────────────────────────────
 
 function BaseScreen({
   onNext,
@@ -392,49 +352,95 @@ function BaseScreen({
   onNext: (text: string) => void;
   onBack: () => void;
 }) {
+  const { width, height } = useWindowDimensions();
+  const { x, y } = scaleDesign(width, height);
   const [text, setText] = useState('');
+  const [showError, setShowError] = useState(false);
+
+  const handleChange = (value: string) => {
+    setText(value);
+    if (showError && value.trim().length > 0) setShowError(false);
+  };
+
+  const handleSubmit = () => {
+    if (text.trim().length === 0) {
+      setShowError(true);
+      return;
+    }
+    onNext(text);
+  };
 
   return (
-    <View style={styles.screenCol}>
-      <View style={styles.headerRow}>
-        <BackButton onPress={onBack} />
-      </View>
+    <View style={styles.flexFill}>
+      <StarCreateHeader onBack={onBack} />
 
-      <View style={styles.centerBody}>
-        <Text style={styles.title}>오늘의 관측을 기록해보세요.</Text>
-        <Text style={styles.subtitle}>
-          짧게, 2~3문장도 괜찮아요.{'\n'}한 줄의 기록도 하나의 별이 됩니다.
-        </Text>
-        <TextInput
-          value={text}
-          onChangeText={setText}
-          placeholder="오늘 하루를 기록해보세요..."
-          placeholderTextColor="rgba(255,255,255,0.3)"
-          multiline
-          textAlignVertical="top"
-          style={styles.textArea}
-        />
-      </View>
+      <AppText
+        variant="emphasis"
+        style={{
+          ...styles.baseTitle,
+          left: x(ScreenLayout.titleX),
+          top: y(ScreenLayout.titleY),
+          width: x(TITLE_MAX_WIDTH),
+        }}
+      >
+        오늘의 관측을 기록해보세요.
+      </AppText>
 
-      <View style={styles.footer}>
-        <BottomButton label="분석하기" onPress={() => onNext(text)} />
-      </View>
+      <AppText
+        style={{
+          ...styles.baseSubtitle,
+          left: x(ScreenLayout.subtitleX),
+          top: y(ScreenLayout.subtitleY),
+          width: x(SUBTITLE_MAX_WIDTH),
+        }}
+      >
+        {'짧게, 2-3문장도 괜찮아요.\n한 줄의 기록도 하나의 별이 됩니다.'}
+      </AppText>
+
+      <TextInput
+        value={text}
+        onChangeText={handleChange}
+        placeholder="오늘 하루를 기록해보세요..."
+        placeholderTextColor="rgba(248,238,193,0.6)"
+        multiline
+        textAlignVertical="top"
+        style={[
+          styles.textArea,
+          {
+            left: x(ScreenLayout.textAreaX),
+            top: y(ScreenLayout.textAreaY),
+            width: x(ScreenLayout.textAreaWidth),
+            height: y(ScreenLayout.textAreaHeight),
+            textAlignVertical: 'top',
+          },
+        ]}
+      />
+
+      {showError && (
+        <View
+          style={[
+            styles.errorRow,
+            {
+              left: x(ScreenLayout.textAreaX),
+              top: y(ScreenLayout.textAreaY) + y(ScreenLayout.textAreaHeight) + 10,
+              width: x(ScreenLayout.textAreaWidth),
+            },
+          ]}
+        >
+          <WarningIcon />
+          <AppText style={styles.errorText}>내용을 입력해주세요.</AppText>
+        </View>
+      )}
+
+      <PrimaryButton label="기록 분석하기" onPress={handleSubmit} />
     </View>
   );
 }
 
-// ─── Screen 2: Loading ─────────────────────────────────────────────────────
+// ─── STATE 2: Supplement ────────────────────────────────────────────────────
 
-function LoadingScreen() {
-  return (
-    <View style={styles.centeredScreen}>
-      <ActivityIndicator size="large" color={COLORS.purpleSoft} />
-      <Text style={styles.loadingText}>Solar AI가 오늘 하루의 조각을 분석하고 있어요...</Text>
-    </View>
-  );
-}
-
-// ─── Screen 3: Supplement ──────────────────────────────────────────────────
+/** 하루 기록 화면 서브카피(y:300) ↔ 텍스트창(y:370) 간격의 절반 — 디자인 px */
+const SUPPLEMENT_BLOCK_GAP = (ScreenLayout.textAreaY - ScreenLayout.subtitleY) / 2; // 35
 
 function SupplementScreen({
   missingTags,
@@ -445,55 +451,86 @@ function SupplementScreen({
   onNext: (text: string) => void;
   onBack: () => void;
 }) {
+  const { width, height } = useWindowDimensions();
+  const { x, y } = scaleDesign(width, height);
   const [text, setText] = useState('');
+  const [titleBottom, setTitleBottom] = useState(0);
+  const [questionsBottom, setQuestionsBottom] = useState(0);
   const questions = REQUIRED_TAGS.filter((t) => missingTags.includes(t.key));
 
+  const blockGap = y(SUPPLEMENT_BLOCK_GAP);
+  const titleTop = y(ScreenLayout.titleY);
+  const questionsTop =
+    titleBottom > 0 ? titleBottom + y(12) : y(ScreenLayout.subtitleY);
+  const textAreaTop =
+    questionsBottom > 0
+      ? questionsBottom + blockGap
+      : y(ScreenLayout.textAreaY);
+  /** 버튼(y:820)과 겹치지 않도록 텍스트창 하단 여유 */
+  const maxTextAreaTop = y(ScreenLayout.largeButtonTop) - y(ScreenLayout.textAreaHeight) - y(24);
+  const clampedTextAreaTop = Math.min(textAreaTop, maxTextAreaTop);
+
   return (
-    <View style={styles.screenCol}>
-      <View style={styles.headerRow}>
-        <BackButton onPress={onBack} />
-      </View>
+    <View style={styles.flexFill}>
+      <StarCreateHeader onBack={onBack} />
 
-      <ScrollView
-        style={styles.flex}
-        contentContainerStyle={styles.scrollPad}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <AppText
+        variant="emphasis"
+        onLayout={(e) => {
+          const { y: layoutY, height: layoutH } = e.nativeEvent.layout;
+          setTitleBottom(layoutY + layoutH);
+        }}
+        style={{
+          ...styles.baseTitle,
+          left: x(ScreenLayout.titleX),
+          top: titleTop,
+          width: x(TITLE_MAX_WIDTH),
+        }}
       >
-        <Text style={styles.title}>
-          더 정확한 별을 남기기 위해 아래 내용을 보완해 보세요.
-        </Text>
-        <Text style={styles.subtitle}>
-          더 정확한 별을 만들기 위해{'\n'}조금만 더 알려주세요.
-        </Text>
+        {'더 정확한 별을 남기기 위해\n아래 내용을 보완해 보세요.'}
+      </AppText>
 
-        <View style={styles.questionList}>
-          {questions.map((q) => (
-            <View key={q.key} style={styles.questionRow}>
-              <Text style={styles.questionDash}>-</Text>
-              <Text style={styles.questionText}>{q.question}</Text>
-            </View>
-          ))}
-        </View>
-
-        <TextInput
-          value={text}
-          onChangeText={setText}
-          placeholder="자유롭게 작성해보세요..."
-          placeholderTextColor="rgba(255,255,255,0.3)"
-          multiline
-          textAlignVertical="top"
-          style={styles.textArea}
-        />
-      </ScrollView>
-
-      <View style={styles.footer}>
-        <BottomButton
-          label="다음으로"
-          onPress={() => onNext(text)}
-          disabled={text.trim().length < 2}
-        />
+      <View
+        style={[
+          styles.supplementQuestionList,
+          {
+            left: x(ScreenLayout.subtitleX),
+            top: questionsTop,
+            width: x(SUBTITLE_MAX_WIDTH),
+          },
+        ]}
+        onLayout={(e) => {
+          const { y: layoutY, height: layoutH } = e.nativeEvent.layout;
+          setQuestionsBottom(layoutY + layoutH);
+        }}
+      >
+        {questions.map((q) => (
+          <AppText key={q.key} style={styles.supplementQuestion}>
+            {q.question}
+          </AppText>
+        ))}
       </View>
+
+      <TextInput
+        value={text}
+        onChangeText={setText}
+        placeholder="자유롭게 작성해보세요..."
+        placeholderTextColor="rgba(248,238,193,0.6)"
+        multiline
+        textAlignVertical="top"
+        style={[
+          styles.textArea,
+          {
+            left: x(ScreenLayout.textAreaX),
+            top: clampedTextAreaTop,
+            width: x(ScreenLayout.textAreaWidth),
+            height: y(ScreenLayout.textAreaHeight),
+            textAlignVertical: 'top',
+          },
+        ]}
+      />
+
+      <PrimaryButton label="확인" onPress={() => onNext(text)} />
     </View>
   );
 }
@@ -553,7 +590,7 @@ function TagEditModal({
   );
 }
 
-// ─── Screen 4: Confirm ─────────────────────────────────────────────────────
+// ─── STATE 3: Confirm ──────────────────────────────────────────────────────
 
 function ConfirmScreen({
   tags: initialTags,
@@ -584,8 +621,8 @@ function ConfirmScreen({
   const editingRow = rows.find((r) => r.key === editingKey);
 
   return (
-    <View style={styles.screenCol}>
-      <View style={styles.headerRow}>
+    <SafeAreaView style={styles.confirmScreenCol} edges={['top', 'bottom']}>
+      <View style={styles.confirmHeaderRow}>
         <BackButton onPress={onBack} />
       </View>
 
@@ -594,8 +631,8 @@ function ConfirmScreen({
         contentContainerStyle={styles.scrollPad}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>관측을 완료했어요.</Text>
-        <Text style={[styles.subtitle, styles.subtitleTight]}>
+        <Text style={styles.confirmTitle}>관측을 완료했어요.</Text>
+        <Text style={[styles.confirmSubtitle, styles.subtitleTight]}>
           기록을 바탕으로 별의 특징을 분석했어요.
         </Text>
 
@@ -653,11 +690,11 @@ function ConfirmScreen({
           onClose={() => setEditingKey(null)}
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
-// ─── Screen 5: Complete ────────────────────────────────────────────────────
+// ─── STATE 4: Complete ─────────────────────────────────────────────────────
 
 function CompleteScreen({
   cluster,
@@ -695,7 +732,7 @@ function CompleteScreen({
   }, [fadeIn, slideUp]);
 
   return (
-    <View style={styles.screenCol}>
+    <SafeAreaView style={styles.confirmScreenCol} edges={['top', 'bottom']}>
       <Animated.View
         style={[
           styles.completeCenter,
@@ -724,7 +761,7 @@ function CompleteScreen({
       <View style={styles.footer}>
         <BottomButton label="메인으로 돌아가기" onPress={onHome} />
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -732,6 +769,7 @@ function CompleteScreen({
 
 export default function StarRecordView() {
   const router = useRouter();
+  const { width, height } = useWindowDimensions();
   const [screen, setScreen] = useState<Screen>('base');
   const [baseText, setBaseText] = useState('');
   const [missingTags, setMissingTags] = useState<(keyof Tags)[]>([]);
@@ -742,25 +780,18 @@ export default function StarRecordView() {
   const [starIndex] = useState(() => Math.floor(Math.random() * 12) + 1);
   const cluster = CLUSTER_NAMES[clusterIndex];
 
-  useEffect(() => {
-    if (screen !== 'loading') return;
-    const timer = setTimeout(() => {
-      const missing = detectMissingTags(baseText);
-      if (missing.length >= 1) {
-        setMissingTags(missing);
-        setScreen('supplement');
-      } else {
-        const parsed = parseTags(baseText, '', missing);
-        setTags(parsed);
-        setScreen('confirm');
-      }
-    }, LOADING_MS);
-    return () => clearTimeout(timer);
-  }, [screen, baseText]);
-
   const handleBaseNext = (text: string) => {
     setBaseText(text);
-    setScreen('loading');
+    const missing = detectMissingTags(text);
+    if (missing.length > 0) {
+      setMissingTags(missing);
+      setScreen('supplement');
+    } else {
+      setMissingTags([]);
+      const parsed = parseTags(text, '', missing);
+      setTags(parsed);
+      setScreen('confirm');
+    }
   };
 
   const handleSupplementNext = (text: string) => {
@@ -782,20 +813,17 @@ export default function StarRecordView() {
   };
 
   return (
-    <View style={styles.root}>
-      <LinearGradient
-        colors={[COLORS.bgTop, COLORS.bgMid, COLORS.bg]}
-        locations={[0, 0.4, 1]}
-        style={StyleSheet.absoluteFill}
-      />
-      <StarBackground count={70} />
+    <View style={[styles.root, { width, height }]}>
+      <Background width={width} height={height} />
 
-      <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
-        <View style={styles.shell}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScreenContainer withTopPadding={false} withHorizontalPadding={false}>
           {screen === 'base' && (
             <BaseScreen onNext={handleBaseNext} onBack={() => router.back()} />
           )}
-          {screen === 'loading' && <LoadingScreen />}
           {screen === 'supplement' && (
             <SupplementScreen
               missingTags={missingTags}
@@ -816,8 +844,8 @@ export default function StarRecordView() {
           {screen === 'complete' && (
             <CompleteScreen cluster={cluster} starIndex={starIndex} onHome={handleHome} />
           )}
-        </View>
-      </SafeAreaView>
+        </ScreenContainer>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -827,26 +855,112 @@ export default function StarRecordView() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: '#0A1628',
   },
   flex: {
     flex: 1,
   },
-  shell: {
+  flexFill: {
     flex: 1,
   },
-  starBg: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: 'hidden',
+
+  // ─ Shared header (STATE 1 / STATE 2) ─
+  chromeHeaderWrap: {
+    paddingTop: 8,
   },
-  twinkleStar: {
+  chromeHeaderRow: {
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chromeHeaderBack: {
     position: 'absolute',
-    backgroundColor: COLORS.white,
+    left: 16,
+    top: 0,
+    bottom: 0,
+    width: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
   },
-  screenCol: {
+  chromeHeaderTitle: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    color: 'rgba(248,238,193,0.6)',
+    textAlign: 'center',
+  },
+  chromeHeaderDivider: {
+    height: 1,
+    width: '92%',
+    marginHorizontal: 16,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(248,238,193,0.15)',
+  },
+
+  // ─ STATE 1: base ─
+  baseTitle: {
+    position: 'absolute',
+    fontFamily: FontFamily.bold,
+    fontSize: 18,
+    color: '#FFF9DD',
+    textAlign: 'center',
+  },
+  baseSubtitle: {
+    position: 'absolute',
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: 'rgba(255,249,221,0.8)',
+    textAlign: 'center',
+  },
+  errorRow: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  errorText: {
+    fontFamily: FontFamily.regular,
+    fontSize: 11,
+    color: '#F8EEC1',
+    textAlign: 'center',
+  },
+
+  // ─ Shared text area (STATE 1 / STATE 2) ─
+  textArea: {
+    position: 'absolute',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    color: '#FFF9DD',
+    fontFamily: FontFamily.regular,
+    fontSize: 11,
+    textAlign: 'center',
+    textAlignVertical: 'top',
+    backgroundColor: 'rgba(248,238,193,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(248,238,193,0.3)',
+  },
+
+  // ─ STATE 2: supplement ─
+  supplementQuestionList: {
+    position: 'absolute',
+    gap: 4,
+  },
+  supplementQuestion: {
+    fontFamily: FontFamily.regular,
+    fontSize: 11,
+    lineHeight: 16,
+    color: 'rgba(255,249,221,0.85)',
+    textAlign: 'center',
+  },
+
+  // ─ STATE 3 / 4: confirm & complete chrome ─
+  confirmScreenCol: {
     flex: 1,
   },
-  headerRow: {
+  confirmHeaderRow: {
     paddingHorizontal: 20,
     paddingTop: 4,
     flexShrink: 0,
@@ -857,25 +971,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  centerBody: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  centeredScreen: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    gap: 20,
-  },
   scrollPad: {
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: 16,
   },
-  title: {
+  confirmTitle: {
     color: COLORS.white,
     fontSize: 22,
     lineHeight: 32,
@@ -883,7 +984,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     alignSelf: 'stretch',
   },
-  subtitle: {
+  confirmSubtitle: {
     color: 'rgba(255,255,255,0.5)',
     fontSize: 13,
     lineHeight: 20,
@@ -892,18 +993,6 @@ const styles = StyleSheet.create({
   },
   subtitleTight: {
     marginBottom: 20,
-  },
-  textArea: {
-    width: '100%',
-    minHeight: 140,
-    borderRadius: 16,
-    padding: 16,
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 14,
-    lineHeight: 22,
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
   },
   footer: {
     paddingHorizontal: 24,
@@ -916,10 +1005,10 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: 'rgba(248,238,193,0.25)',
   },
   bottomButtonDisabled: {
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(248,238,193,0.1)',
   },
   bottomButtonGradient: {
     paddingVertical: 16,
@@ -934,32 +1023,6 @@ const styles = StyleSheet.create({
   },
   bottomButtonTextDisabled: {
     color: 'rgba(255,255,255,0.35)',
-  },
-  loadingText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 14,
-    letterSpacing: 0.3,
-    textAlign: 'center',
-    lineHeight: 22,
-    paddingHorizontal: 16,
-  },
-  questionList: {
-    marginBottom: 16,
-    gap: 8,
-  },
-  questionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  questionDash: {
-    color: 'rgba(255,255,255,0.3)',
-    fontSize: 12,
-  },
-  questionText: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 12,
-    flex: 1,
   },
   clusterBlock: {
     alignItems: 'center',
