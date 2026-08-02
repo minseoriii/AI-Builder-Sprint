@@ -1,0 +1,58 @@
+<svg width="97" height="97" viewBox="0 0 97 97" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g filter="url(#filter0_d_114_304)">
+<circle cx="49.3" cy="48.3" r="22" stroke="white" stroke-opacity="0.01" shape-rendering="crispEdges"/>
+</g>
+<g filter="url(#filter1_d_114_304)">
+<path d="M49.0454 20.7246L53.6513 44.4394L77.3661 49.0454L53.6513 53.6513L49.0454 77.3661L44.4394 53.6513L20.7246 49.0454L44.4394 44.4394L49.0454 20.7246Z" fill="#FFF9DD"/>
+</g>
+<g filter="url(#filter2_d_114_304)">
+<path d="M44.9731 41.6917C45.8425 37.2151 52.2482 37.2151 53.1176 41.6917C53.4401 43.3522 54.7385 44.6506 56.399 44.9731C60.8756 45.8425 60.8756 52.2482 56.399 53.1176C54.7385 53.4401 53.4401 54.7385 53.1176 56.399C52.2482 60.8756 45.8425 60.8756 44.9731 56.399C44.6506 54.7385 43.3522 53.4401 41.6917 53.1176C37.2151 52.2482 37.2151 45.8425 41.6917 44.9731C43.3522 44.6506 44.6506 43.3522 44.9731 41.6917Z" fill="#FFF9DD"/>
+</g>
+<g filter="url(#filter3_d_114_304)">
+<circle cx="48.3" cy="48.3" r="39" stroke="white" stroke-opacity="0.01" shape-rendering="crispEdges"/>
+</g>
+<defs>
+<filter id="filter0_d_114_304" x="18" y="17" width="62.6" height="62.6" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feMorphology radius="3" operator="dilate" in="SourceAlpha" result="effect1_dropShadow_114_304"/>
+<feOffset/>
+<feGaussianBlur stdDeviation="2.9"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.29 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_114_304"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_114_304" result="shape"/>
+</filter>
+<filter id="filter1_d_114_304" x="9.32461" y="9.32461" width="79.4415" height="79.4415" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset/>
+<feGaussianBlur stdDeviation="5.7"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0.954778 0 0 0 0 0.880872 0 0 0 0 0.551658 0 0 0 1 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_114_304"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_114_304" result="shape"/>
+</filter>
+<filter id="filter2_d_114_304" x="26.9344" y="26.9344" width="44.2221" height="44.2221" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset/>
+<feGaussianBlur stdDeviation="5.7"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0.954778 0 0 0 0 0.880872 0 0 0 0 0.551658 0 0 0 1 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_114_304"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_114_304" result="shape"/>
+</filter>
+<filter id="filter3_d_114_304" x="4.86374e-05" y="4.86374e-05" width="96.6" height="96.6" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feMorphology radius="3" operator="dilate" in="SourceAlpha" result="effect1_dropShadow_114_304"/>
+<feOffset/>
+<feGaussianBlur stdDeviation="2.9"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.62 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_114_304"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_114_304" result="shape"/>
+</filter>
+</defs>
+</svg>
