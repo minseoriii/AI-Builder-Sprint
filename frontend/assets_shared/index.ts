@@ -29,6 +29,13 @@ export type { BackgroundProps } from './components/Background';
 export { ImageAssets } from './images';
 
 export {
+  BottomNavigationBar,
+  BottomNavigationBarDimensions,
+  bottomNavigationInset,
+} from './components/BottomNavigationBar';
+export type { BottomNavTab, BottomNavigationBarProps } from './components/BottomNavigationBar';
+
+export {
   CLUSTER_LABEL_COLORS,
   CLUSTER_ICON_VIEWBOX,
   getClusterLabelColor,
