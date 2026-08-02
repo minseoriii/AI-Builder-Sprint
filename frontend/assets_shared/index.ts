@@ -21,14 +21,23 @@ export { ClusterIcon } from './components/ClusterIcon';
 export type { ClusterIconProps } from './components/ClusterIcon';
 
 export {
+  ClusterIcon1,
+  ClusterIcon2,
+  ClusterIcon3,
+  ClusterIcon4,
+  ClusterIcon5,
+  ClusterSvgIcon,
+  ClusterPngSources,
+} from './components/ClusterIcons';
+
+export { Background } from './components/Background';
+export type { BackgroundProps } from './components/Background';
+
+export { ImageAssets } from './images';
+
+export {
   CLUSTER_LABEL_COLORS,
   CLUSTER_ICON_VIEWBOX,
   getClusterLabelColor,
 } from './clusters';
 export type { ClusterIndex } from './clusters';
-
-/** PNG 에셋 — 파일 추가 후 여기에 re-export */
-// export { default as ExampleIcon } from './images/example.png';
-
-/** SVG 컴포넌트 — 파일 추가 후 ./svg/index.ts 에서 re-export */
-export * from './svg';

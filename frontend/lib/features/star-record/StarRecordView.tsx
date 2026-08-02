@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -22,12 +23,16 @@ import Svg, { Defs, Path, Stop, LinearGradient as SvgLinearGradient } from 'reac
 import {
   AppText,
   Background,
+  ClusterIcon,
+  Colors,
   FontFamily,
+  getClusterLabelColor,
   PrimaryButton,
   ScreenContainer,
   ScreenLayout,
   scaleDesign,
 } from '@/assets_shared';
+import type { ClusterIndex } from '@/assets_shared';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -69,7 +74,22 @@ const REQUIRED_TAGS: TagMeta[] = [
   { key: 'emotion', label: '감정', icon: '💜', question: '그때 감정은 어땠나요?' },
 ];
 
-const CLUSTER_NAMES = ['일상', '관계·사랑', '성장·도전', '휴식·여유', '특별한 순간'];
+const CLUSTER_NAMES = ['일상', '관계·사랑', '성장·도전', '휴식·여유', '특별한 순간'] as const;
+
+/** 0-based 배열 인덱스 → 1-based ClusterIndex (ic_cluster1~5) */
+function toClusterId(index0: number): ClusterIndex {
+  return ((index0 % CLUSTER_NAMES.length) + 1) as ClusterIndex;
+}
+
+const TAG_ICON_SOURCES: Record<keyof Tags, number> = {
+  together: require('@/assets_shared/images/Customer.png'),
+  place: require('@/assets_shared/images/Address.png'),
+  time: require('@/assets_shared/images/Vector.png'),
+  activity: require('@/assets_shared/images/Walking.png'),
+  emotion: require('@/assets_shared/images/Love.png'),
+};
+
+const PEN_ICON = require('@/assets_shared/images/Group 90.png');
 
 /** STATE1/2 타이틀·서브카피 폭 계산용 — DesignFrame(412) 기준 좌우 대칭 여백 */
 const TITLE_MAX_WIDTH = 412 - ScreenLayout.titleX * 2;
@@ -558,34 +578,42 @@ function TagEditModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <Pressable style={styles.modalCard} onPress={() => undefined}>
-          <LinearGradient colors={['#1a2a50', '#0f1e3d']} style={styles.modalCardInner}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{tagLabel}를 수정해주세요.</Text>
-              <TouchableOpacity onPress={onClose} hitSlop={8} activeOpacity={0.7}>
-                <CloseIcon />
-              </TouchableOpacity>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <Pressable style={styles.modalOverlay} onPress={onClose}>
+          <Pressable style={styles.modalCard} onPress={() => undefined}>
+            <View style={styles.modalCardInner}>
+              <View style={styles.modalHeader}>
+                <AppText style={styles.modalTitle}>{tagLabel}를 수정해주세요.</AppText>
+                <TouchableOpacity onPress={onClose} hitSlop={8} activeOpacity={0.7}>
+                  <CloseIcon />
+                </TouchableOpacity>
+              </View>
+
+              <TextInput
+                value={value}
+                onChangeText={setValue}
+                autoFocus
+                textAlignVertical="top"
+                style={styles.modalInput}
+                placeholderTextColor="rgba(248,238,193,0.6)"
+              />
+
+              <PrimaryButton
+                label="수정 완료"
+                pinnedToLargeTop={false}
+                style={styles.modalPrimaryButton}
+                onPress={() => {
+                  onSave(value.trim() || currentValue);
+                  onClose();
+                }}
+              />
             </View>
-
-            <TextInput
-              value={value}
-              onChangeText={setValue}
-              autoFocus
-              style={styles.modalInput}
-              placeholderTextColor="rgba(255,255,255,0.3)"
-            />
-
-            <BottomButton
-              label="수정 완료"
-              onPress={() => {
-                onSave(value.trim() || currentValue);
-                onClose();
-              }}
-            />
-          </LinearGradient>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -595,91 +623,97 @@ function TagEditModal({
 function ConfirmScreen({
   tags: initialTags,
   cluster,
-  baseText,
+  clusterId,
   onCycleCluster,
   onNext,
   onBack,
 }: {
   tags: Tags;
   cluster: string;
-  baseText: string;
+  clusterId: ClusterIndex;
   onCycleCluster: () => void;
   onNext: () => void;
   onBack: () => void;
 }) {
+  const { width, height } = useWindowDimensions();
+  const { y } = scaleDesign(width, height);
   const [tags, setTags] = useState<Tags>(initialTags);
   const [editingKey, setEditingKey] = useState<keyof Tags | null>(null);
 
-  const rows: { key: keyof Tags; icon: string; label: string }[] = [
-    { key: 'together', icon: '👤', label: '함께한 사람' },
-    { key: 'place', icon: '📍', label: '장소' },
-    { key: 'time', icon: '🕐', label: '시간' },
-    { key: 'activity', icon: '🚶', label: '활동' },
-    { key: 'emotion', icon: '💜', label: '감정' },
+  const rows: { key: keyof Tags; label: string }[] = [
+    { key: 'together', label: '함께한 사람' },
+    { key: 'place', label: '장소' },
+    { key: 'time', label: '시간' },
+    { key: 'activity', label: '활동' },
+    { key: 'emotion', label: '감정' },
   ];
 
   const editingRow = rows.find((r) => r.key === editingKey);
 
   return (
-    <SafeAreaView style={styles.confirmScreenCol} edges={['top', 'bottom']}>
-      <View style={styles.confirmHeaderRow}>
-        <BackButton onPress={onBack} />
-      </View>
+    <View style={styles.flexFill}>
+      <StarCreateHeader onBack={onBack} />
 
       <ScrollView
         style={styles.flex}
-        contentContainerStyle={styles.scrollPad}
+        contentContainerStyle={styles.confirmScrollPad}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.confirmTitle}>관측을 완료했어요.</Text>
-        <Text style={[styles.confirmSubtitle, styles.subtitleTight]}>
+        <AppText variant="emphasis" style={styles.confirmTitle}>
+          관측을 완료했어요.
+        </AppText>
+        <AppText style={styles.confirmSubtitle}>
           기록을 바탕으로 별의 특징을 분석했어요.
-        </Text>
+        </AppText>
 
         <TouchableOpacity
           style={styles.clusterBlock}
           onPress={onCycleCluster}
           activeOpacity={0.75}
         >
-          <PurpleStarIcon size={44} />
-          <Text style={styles.clusterName}>{cluster}</Text>
-          <Text style={styles.clusterHint}>탭하여 성단을 변경할 수 있어요</Text>
+          <ClusterIcon cluster={clusterId} label={cluster} iconSize={52} />
+          <AppText style={styles.clusterHint}>탭하여 성단을 변경할 수 있어요</AppText>
         </TouchableOpacity>
 
         <View style={styles.tagList}>
           {rows.map((r) => {
             const isActive = editingKey === r.key;
             return (
-              <View key={r.key} style={styles.tagRow}>
-                <Text style={styles.tagIcon}>{r.icon}</Text>
-                <Text style={styles.tagLabel}>{r.label}</Text>
-                <Text style={styles.tagValue} numberOfLines={2}>
+              <View
+                key={r.key}
+                style={[
+                  styles.tagRow,
+                  isActive && styles.tagRowActive,
+                ]}
+              >
+                <Image
+                  source={TAG_ICON_SOURCES[r.key]}
+                  style={styles.tagIconImage}
+                  resizeMode="contain"
+                />
+                <AppText style={styles.tagLabel}>{r.label}</AppText>
+                <AppText style={styles.tagValue} numberOfLines={2}>
                   {tags[r.key]}
-                </Text>
+                </AppText>
                 <TouchableOpacity
                   onPress={() => setEditingKey(r.key)}
                   style={styles.editBtn}
                   hitSlop={8}
                   activeOpacity={0.7}
                 >
-                  <EditIcon active={isActive} />
+                  <Image source={PEN_ICON} style={styles.penIcon} resizeMode="contain" />
                 </TouchableOpacity>
               </View>
             );
           })}
         </View>
 
-        <View style={styles.originalCard}>
-          <Text style={styles.originalLabel}>원문</Text>
-          <Text style={styles.originalText} numberOfLines={3}>
-            {baseText}
-          </Text>
-        </View>
+        {/* PrimaryButton absolute pin 여유 */}
+        <View style={{ height: y(ScreenLayout.largeButtonHeight) + y(40) }} />
       </ScrollView>
 
-      <View style={styles.footer}>
-        <BottomButton label="이대로 별 남기기" onPress={onNext} />
-      </View>
+      <PrimaryButton label="별 생성하기" onPress={onNext} />
 
       {editingRow && editingKey && (
         <TagEditModal
@@ -690,7 +724,7 @@ function ConfirmScreen({
           onClose={() => setEditingKey(null)}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -698,10 +732,12 @@ function ConfirmScreen({
 
 function CompleteScreen({
   cluster,
+  clusterId,
   starIndex,
   onHome,
 }: {
   cluster: string;
+  clusterId: ClusterIndex;
   starIndex: number;
   onHome: () => void;
 }) {
@@ -710,6 +746,7 @@ function CompleteScreen({
   const month = now.getMonth() + 1;
   const day = now.getDate();
   const season = getSeasonGalaxy();
+  const clusterColor = getClusterLabelColor(clusterId);
 
   const fadeIn = useRef(new Animated.Value(0)).current;
   const slideUp = useRef(new Animated.Value(24)).current;
@@ -753,7 +790,8 @@ function CompleteScreen({
           </Text>
           <Text style={styles.metaLine}>{season}의 은하</Text>
           <Text style={styles.metaEmphasis}>
-            {cluster} 성단의 {starIndex}번째 별
+            <Text style={{ color: clusterColor }}>{cluster}</Text>
+            {` 성단의 ${starIndex}번째 별`}
           </Text>
         </View>
       </Animated.View>
@@ -774,11 +812,12 @@ export default function StarRecordView() {
   const [baseText, setBaseText] = useState('');
   const [missingTags, setMissingTags] = useState<(keyof Tags)[]>([]);
   const [tags, setTags] = useState<Tags | null>(null);
-  const [clusterIndex, setClusterIndex] = useState(
+  const [clusterIndex0, setClusterIndex0] = useState(
     () => Math.floor(Math.random() * CLUSTER_NAMES.length),
   );
   const [starIndex] = useState(() => Math.floor(Math.random() * 12) + 1);
-  const cluster = CLUSTER_NAMES[clusterIndex];
+  const clusterId = toClusterId(clusterIndex0);
+  const cluster = CLUSTER_NAMES[clusterIndex0];
 
   const handleBaseNext = (text: string) => {
     setBaseText(text);
@@ -801,7 +840,7 @@ export default function StarRecordView() {
   };
 
   const handleCycleCluster = () => {
-    setClusterIndex((i) => (i + 1) % CLUSTER_NAMES.length);
+    setClusterIndex0((i) => (i + 1) % CLUSTER_NAMES.length);
   };
 
   const handleConfirmNext = () => {
@@ -835,14 +874,19 @@ export default function StarRecordView() {
             <ConfirmScreen
               tags={tags}
               cluster={cluster}
-              baseText={baseText}
+              clusterId={clusterId}
               onCycleCluster={handleCycleCluster}
               onNext={handleConfirmNext}
               onBack={() => setScreen(missingTags.length > 0 ? 'supplement' : 'base')}
             />
           )}
           {screen === 'complete' && (
-            <CompleteScreen cluster={cluster} starIndex={starIndex} onHome={handleHome} />
+            <CompleteScreen
+              cluster={cluster}
+              clusterId={clusterId}
+              starIndex={starIndex}
+              onHome={handleHome}
+            />
           )}
         </ScreenContainer>
       </KeyboardAvoidingView>
@@ -976,24 +1020,6 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 16,
   },
-  confirmTitle: {
-    color: COLORS.white,
-    fontSize: 22,
-    lineHeight: 32,
-    fontWeight: '600',
-    marginBottom: 8,
-    alignSelf: 'stretch',
-  },
-  confirmSubtitle: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 13,
-    lineHeight: 20,
-    marginBottom: 24,
-    alignSelf: 'stretch',
-  },
-  subtitleTight: {
-    marginBottom: 20,
-  },
   footer: {
     paddingHorizontal: 24,
     paddingBottom: 24,
@@ -1024,46 +1050,82 @@ const styles = StyleSheet.create({
   bottomButtonTextDisabled: {
     color: 'rgba(255,255,255,0.35)',
   },
+  // ─ STATE 3: confirm ─
+  confirmScrollPad: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 24,
+  },
+  confirmTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: 18,
+    color: '#FFF9DD',
+    textAlign: 'center',
+    marginBottom: 12,
+    alignSelf: 'stretch',
+  },
+  confirmSubtitle: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: 'rgba(255,249,221,0.8)',
+    textAlign: 'center',
+    marginBottom: 20,
+    alignSelf: 'stretch',
+  },
   clusterBlock: {
     alignItems: 'center',
     marginBottom: 20,
   },
   clusterName: {
-    color: 'rgba(255,255,255,0.8)',
+    fontFamily: FontFamily.regular,
+    color: 'rgba(255,249,221,0.85)',
     fontSize: 14,
-    fontWeight: '500',
     marginTop: 8,
+    textAlign: 'center',
   },
   clusterHint: {
-    color: 'rgba(255,255,255,0.35)',
+    fontFamily: FontFamily.regular,
+    color: 'rgba(248,238,193,0.45)',
     fontSize: 12,
     marginTop: 4,
+    textAlign: 'center',
   },
   tagList: {
     gap: 8,
     marginBottom: 20,
+    width: '100%',
   },
   tagRow: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: COLORS.card,
+    backgroundColor: Colors.button.fill,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: Colors.tag.borderInactive,
   },
-  tagIcon: {
-    fontSize: 16,
-    marginRight: 12,
+  tagRowActive: {
+    backgroundColor: Colors.button.fill,
+    borderColor: Colors.tag.borderActive,
+    borderWidth: 2,
+  },
+  tagIconImage: {
+    width: 20,
+    height: 20,
+    marginRight: 10,
   },
   tagLabel: {
-    color: 'rgba(255,255,255,0.4)',
+    fontFamily: FontFamily.regular,
+    color: Colors.text.tag,
     fontSize: 12,
     width: 80,
+    opacity: 0.7,
   },
   tagValue: {
-    color: 'rgba(255,255,255,0.85)',
+    fontFamily: FontFamily.regular,
+    color: Colors.text.tag,
     fontSize: 14,
     flex: 1,
   },
@@ -1071,24 +1133,9 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     padding: 4,
   },
-  originalCard: {
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
-    marginBottom: 8,
-  },
-  originalLabel: {
-    color: 'rgba(255,255,255,0.35)',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  originalText: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 12,
-    lineHeight: 18,
+  penIcon: {
+    width: 28,
+    height: 28,
   },
   modalOverlay: {
     flex: 1,
@@ -1102,10 +1149,11 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(248,238,193,0.3)',
+    backgroundColor: '#0f1e3d',
   },
   modalCardInner: {
-    paddingHorizontal: 24,
+    paddingHorizontal: ScreenLayout.horizontal,
     paddingTop: 24,
     paddingBottom: 24,
     gap: 20,
@@ -1116,22 +1164,29 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   modalTitle: {
-    color: COLORS.white,
+    fontFamily: FontFamily.bold,
+    color: '#F8EEC1',
     fontSize: 16,
-    fontWeight: '600',
     flex: 1,
     paddingRight: 12,
   },
   modalInput: {
     width: '100%',
-    borderRadius: 12,
+    minHeight: 48,
+    borderRadius: 14,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    color: 'rgba(255,255,255,0.9)',
+    paddingVertical: 14,
+    color: '#FFF9DD',
+    fontFamily: FontFamily.regular,
     fontSize: 14,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: Colors.button.fill,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: 'rgba(248,238,193,0.6)',
+  },
+  modalPrimaryButton: {
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 372,
   },
   completeCenter: {
     flex: 1,

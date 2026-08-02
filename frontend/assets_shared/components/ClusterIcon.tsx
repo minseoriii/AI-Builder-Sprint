@@ -5,12 +5,12 @@ import {
   getClusterLabelColor,
 } from '../clusters';
 import { FontFamily } from '../typography';
-import { ClusterSvgIcon } from '../svg/ClusterIcons';
+import { ClusterSvgIcon } from './ClusterIcons';
 
 export interface ClusterIconProps {
   /** ic_cluster1 ~ ic_cluster5 */
   cluster: ClusterIndex;
-  /** SVG 아래 표시할 라벨 */
+  /** 아이콘 아래 표시할 라벨 */
   label: string;
   iconSize?: number;
   onPress?: () => void;
@@ -19,7 +19,7 @@ export interface ClusterIconProps {
 }
 
 /**
- * 성단 SVG + 하단 라벨
+ * 성단 PNG + 하단 라벨
  * 라벨 색상은 cluster 번호별 고정 (ic_cluster1 #FFAEAE … ic_cluster5 #E4B2FF)
  */
 export function ClusterIcon({
