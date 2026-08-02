@@ -10,10 +10,19 @@ ROOT = Path(__file__).resolve().parents[2]
 DOCS = ROOT / "docs"
 DOCS.mkdir(exist_ok=True)
 
+SERVICE_NAME = "Polaris"
 SPEC_DATE = date.today().isoformat()
 SPEC_FILENAME = f"API_SPEC_POLARIS_DEVELOP_{SPEC_DATE.replace('-', '_')}.html"
 BASE_URL_VAR = "{{baseUrl}}"
 TOKEN_VAR = "{{accessToken}}"
+
+NORTH_STAR_EDITABILITY_EXAMPLE = {
+    "editable": False,
+    "locked_season_year": 2026,
+    "locked_season": "SUMMER",
+    "locked_season_label": "여름",
+    "editable_from": "2026-09-01",
+}
 
 endpoints: list[dict] = [
     {
@@ -85,6 +94,14 @@ endpoints: list[dict] = [
             "onboarding_completed": False,
             "north_star": None,
             "north_star_editability": {"editable": True},
+        },
+        "exampleResponseCompleted": {
+            "onboarding_completed": True,
+            "north_star": {
+                "text": "가족과 건강을 지키면서 꾸준히 배우고 싶다.",
+                "selected_categories": ["가족", "건강", "성장·배움", "관계·사랑", "균형·조화"],
+            },
+            "north_star_editability": NORTH_STAR_EDITABILITY_EXAMPLE,
         },
     },
     {
@@ -159,6 +176,7 @@ endpoints: list[dict] = [
                 "text": "가족과 건강을 지키면서 꾸준히 배우고 싶다.",
                 "selected_categories": ["가족", "건강", "성장·배움", "관계·사랑", "균형·조화"],
             },
+            "north_star_editability": NORTH_STAR_EDITABILITY_EXAMPLE,
         },
     },
     {
@@ -810,9 +828,9 @@ def build_postman_collection() -> dict:
 
     return {
         "info": {
-            "_postman_id": "ieum-api-collection",
-            "name": "Polaris API (가치 정렬 AI 저널)",
-            "description": f"Polaris 백엔드 API Postman Collection — {SPEC_DATE} develop 기준",
+            "_postman_id": "polaris-api-collection",
+            "name": f"{SERVICE_NAME} API (가치 정렬 AI 저널)",
+            "description": f"{SERVICE_NAME} 백엔드 API Postman Collection — {SPEC_DATE} develop 기준",
             "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
         },
         "variable": [
@@ -836,7 +854,7 @@ def build_html() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Polaris 백엔드 API 연동 명세서 - develop {SPEC_DATE}</title>
+  <title>{SERVICE_NAME} 백엔드 API 연동 명세서 - develop {SPEC_DATE}</title>
   <style>
     * {{ box-sizing: border-box; }}
     :root {{ --bg: #f5f6f8; --paper: #ffffff; --ink: #202733; --muted: #607084; --line: #d7dee8; --soft: #eef3f8; --code: #f3f6fa; --blue: #225ea8; --green: #0f766e; --amber: #9a5b00; --red: #b42318; }}
@@ -872,8 +890,8 @@ def build_html() -> str:
 <body>
 <main>
   <header>
-    <h1>Polaris 백엔드 API 연동 명세서</h1>
-    <p class="meta">전달 대상: 프론트엔드/QA · 작성 주체: 백엔드 · 기준일: {SPEC_DATE}</p>
+    <h1>{SERVICE_NAME} 백엔드 API 연동 명세서</h1>
+    <p class="meta">서비스명: {SERVICE_NAME} · 전달 대상: 프론트엔드/QA · 작성 주체: 백엔드 · 기준일: {SPEC_DATE}</p>
     <p class="meta">프로젝트: AI Builder Sprint 2026 「가치 정렬 AI 저널」 · 기준 브랜치: develop</p>
     <div class="summary"><strong>화면별 호출 순서</strong>와 <strong>API 상세</strong>를 기준으로 연동하면 됩니다. 인증은 Supabase <code>Authorization: Bearer &#123;accessToken&#125;</code>이며, 회원가입/로그인 API는 백엔드에 없고 프론트 Supabase Auth가 처리합니다.</div>
     <div class="grid">
@@ -901,9 +919,12 @@ def build_html() -> str:
     <table>
       <thead><tr><th>항목</th><th>현재 기준</th><th>연동 메모</th></tr></thead>
       <tbody>
-        <tr><td>기준 브랜치</td><td><code>develop</code></td><td>Polaris MVP — onboarding / home / stars / daily-records / comets / galaxy</td></tr>
+        <tr><td>서비스명</td><td><strong>{SERVICE_NAME}</strong></td><td>가치 정렬 AI 저널 — 북극성·별·혜성·은하 메타포</td></tr>
+        <tr><td>기준 브랜치</td><td><code>develop</code></td><td>{SERVICE_NAME} MVP — onboarding / home / stars / daily-records / comets / galaxy</td></tr>
         <tr><td>인증</td><td><code>Authorization: Bearer &#123;SUPABASE_ACCESS_TOKEN&#125;</code></td><td>앱 최초 실행 시 Supabase 익명 로그인(<code>signInAnonymously</code>) 후 access token 사용</td></tr>
         <tr><td>Base URL (로컬)</td><td><code>http://127.0.0.1:8000</code></td><td>Android Emulator: <code>http://10.0.2.2:8000</code></td></tr>
+        <tr><td>북극성 선택</td><td>AI 후보 7개 → 사용자 <strong>정확히 5개</strong> 선택</td><td>후보 밖 성단 선택 불가</td></tr>
+        <tr><td>북극성 수정</td><td>설정한 <strong>계절이 끝난 뒤</strong> 다음 계절부터 가능</td><td><code>north_star_editability.editable</code> · 잠금 시 <code>NORTH_STAR_SEASON_LOCKED</code></td></tr>
         <tr><td>AI 분석</td><td>Upstage Solar Pro 3</td><td>북극성·하루기록·혜성추천·은하요약 — 로딩/재시도 UI 필요. AI 실패 시 502</td></tr>
         <tr><td>분석 TTL</td><td>24시간</td><td>북극성·하루기록·혜성추천 분석 결과 만료 시 재분석 필요</td></tr>
         <tr><td>오류 형식</td><td><code>{{"detail": {{"code", "message"}}}}</code></td><td><code>code</code> 기준으로 화면 분기</td></tr>
@@ -959,7 +980,8 @@ def build_html() -> str:
       <thead><tr><th>화면/기능</th><th>포함 API</th><th>연동 메모</th></tr></thead>
       <tbody>
         <tr><td>앱 진입</td><td>Supabase Auth (FE), GET /api/v1/me/onboarding</td><td>세션 없으면 signInAnonymously → token으로 onboarding 상태 확인</td></tr>
-        <tr><td>온보딩 · 북극성</td><td>POST analyze → PUT north-star</td><td>7개 후보 중 정확히 5개 성단 선택, 원문 그대로 저장</td></tr>
+        <tr><td>온보딩 · 북극성</td><td>POST analyze → PUT north-star</td><td>7개 후보 중 정확히 5개 성단 선택; 온보딩 후 같은 계절 수정 불가</td></tr>
+        <tr><td>북극성 재설정</td><td>GET onboarding → POST analyze → PUT north-star</td><td><code>north_star_editability.editable=true</code>일 때만 (다음 계절부터)</td></tr>
         <tr><td>홈 · 성단</td><td>GET /api/v1/home, GET /api/v1/constellations/{{category}}/stars</td><td>성단 클릭 → 별 날짜(년/월/일)·기록 내용·태그</td></tr>
         <tr><td>하루 기록</td><td>daily-records analyze → details → confirm</td><td>5차원 태그 확인/수정 후 주 성단 확정 → 별 생성</td></tr>
         <tr><td>혜성 추천</td><td>comet-recommendations generate/accept/reject</td><td>홈 또는 별도 UI에서 추천 노출</td></tr>
@@ -980,6 +1002,7 @@ def build_html() -> str:
         <tr><td>인증 헤더</td><td><code>Authorization: Bearer &#123;SUPABASE_ACCESS_TOKEN&#125;</code></td></tr>
         <tr><td>Content-Type</td><td><code>application/json</code></td></tr>
         <tr><td>시간</td><td>datetime은 ISO 8601 UTC (<code>2026-07-31T12:00:00Z</code>), date는 <code>YYYY-MM-DD</code></td></tr>
+        <tr><td>계절 기준</td><td>Asia/Seoul 달력 월 · 별 <code>recorded_on</code> 기준 집계</td><td>봄 3~5월, 여름 6~8월, 가을 9~11월, 겨울 12~2월(연도는 겨울 시작 연도)</td></tr>
         <tr><td>사용자 ID</td><td>요청 body/query에 user id 넣지 않음 — JWT sub만 사용</td></tr>
         <tr><td>Swagger</td><td><code>/docs</code>, <code>/redoc</code>, <code>/openapi.json</code></td></tr>
         <tr><td>CORS</td><td>기본 localhost Expo 포트 허용 (<code>.env</code> CORS_ORIGINS)</td></tr>
@@ -994,8 +1017,15 @@ def build_html() -> str:
       <li>Supabase 세션 확인 → 없으면 <code>signInAnonymously()</code></li>
       <li><code>GET /api/v1/me/onboarding</code> — 완료 여부 확인</li>
       <li>미완료: 북극성 입력 → <code>POST /api/v1/onboarding/north-star/analyze</code></li>
-      <li>후보 선택 → <code>PUT /api/v1/onboarding/north-star</code></li>
+      <li>후보 7개 중 <strong>정확히 5개</strong> 선택 → <code>PUT /api/v1/onboarding/north-star</code></li>
       <li><code>GET /api/v1/home</code> 홈 진입</li>
+    </ol>
+    <h3>북극성 재설정 (다음 계절)</h3>
+    <ol>
+      <li><code>GET /api/v1/me/onboarding</code> — <code>north_star_editability.editable</code> 확인</li>
+      <li><code>false</code>면 <code>editable_from</code>까지 수정 UI 비활성화</li>
+      <li><code>true</code>면 analyze → PUT north-star (온보딩과 동일 플로우)</li>
+      <li>저장 후 해당 계절 동안 다시 잠금</li>
     </ol>
     <h3>하루 기록 (별 생성)</h3>
     <ol>
@@ -1021,7 +1051,7 @@ def build_html() -> str:
       <tbody>
         <tr><td>401</td><td>AUTH_TOKEN_MISSING, AUTH_TOKEN_INVALID</td><td>Supabase 세션 재발급 또는 익명 로그인 재시도</td></tr>
         <tr><td>404</td><td>ANALYSIS_NOT_FOUND, DAILY_RECORD_NOT_FOUND, COMET_NOT_FOUND, GALAXY_REPORT_NOT_FOUND</td><td>리소스 없음 안내, 목록으로 이동</td></tr>
-        <tr><td>422</td><td>VALIDATION_ERROR, ANALYSIS_EXPIRED, INVALID_SELECTION, INSUFFICIENT_RECORDS 등</td><td>입력값/만료/상태 오류 — 재분석 또는 수정 유도</td></tr>
+        <tr><td>422</td><td>VALIDATION_ERROR, ANALYSIS_EXPIRED, INVALID_SELECTION, NORTH_STAR_SEASON_LOCKED, INSUFFICIENT_RECORDS 등</td><td>입력값/만료/상태/계절 잠금 — 재분석·다음 계절 안내</td></tr>
         <tr><td>502</td><td>AI_SERVICE_ERROR, AI_RESPONSE_INVALID</td><td>AI 일시 오류 — 재시도 버튼</td></tr>
         <tr><td>503</td><td>AUTH_SERVICE_UNAVAILABLE</td><td>Supabase 장애 — 잠시 후 재시도</td></tr>
         <tr><td>500</td><td>DATABASE_ERROR</td><td>일반 오류 안내</td></tr>
@@ -1042,7 +1072,8 @@ def build_html() -> str:
         <tr><td><code>CometStatus</code></td><td><code>PENDING, COMPLETED, CANCELLED</code></td><td>혜성 상태</td></tr>
         <tr><td><code>CometSourceType</code></td><td><code>AI_RECOMMENDATION, USER_CREATED</code></td><td>혜성 출처</td></tr>
         <tr><td><code>CometRecordStatus</code></td><td><code>RECORDED, STAR_CREATED</code></td><td>관측완료 탭 기록 상태</td></tr>
-        <tr><td><code>Season</code></td><td><code>SPRING, SUMMER, AUTUMN, WINTER</code></td><td>은하 overview/report (봄/여름/가을/겨울)</td></tr>
+        <tr><td><code>Season</code></td><td><code>SPRING, SUMMER, AUTUMN, WINTER</code></td><td>은하 overview/report · 북극성 수정 잠금 (봄 3~5 / 여름 6~8 / 가을 9~11 / 겨울 12~2)</td></tr>
+        <tr><td><code>NORTH_STAR_SELECTED_COUNT</code></td><td><code>5</code></td><td>북극성 저장 시 선택 성단 개수 (정확히 5개)</td></tr>
       </tbody>
     </table>
   </section>
