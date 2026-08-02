@@ -1,5 +1,5 @@
 export { Palette, Colors, withOpacity } from './colors';
-export { ScreenLayout, DesignFrame, scaleDesign } from './spacing';
+export { ScreenLayout, DesignFrame, scaleDesign, onboardingContentTop } from './spacing';
 export { Radii } from './radii';
 export { FontFamily, FontSize, TextStyles } from './typography';
 
@@ -17,18 +17,11 @@ export type { AppTextProps, AppTextVariant } from './components/AppText';
 export { ScreenContainer } from './components/ScreenContainer';
 export type { ScreenContainerProps } from './components/ScreenContainer';
 
+export { BackButton, BackButtonTouchable } from './components/BackButton';
+export type { BackButtonProps } from './components/BackButton';
+
 export { ClusterIcon } from './components/ClusterIcon';
 export type { ClusterIconProps } from './components/ClusterIcon';
-
-export {
-  ClusterIcon1,
-  ClusterIcon2,
-  ClusterIcon3,
-  ClusterIcon4,
-  ClusterIcon5,
-  ClusterSvgIcon,
-  ClusterPngSources,
-} from './components/ClusterIcons';
 
 export { Background } from './components/Background';
 export type { BackgroundProps } from './components/Background';
@@ -41,3 +34,6 @@ export {
   getClusterLabelColor,
 } from './clusters';
 export type { ClusterIndex } from './clusters';
+
+/** PNG 아이콘 — develop stars_png 에셋 */
+export * from './stars_png';

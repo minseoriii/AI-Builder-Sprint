@@ -8,4 +8,6 @@ export const Radii = {
   button: 30,
   /** 태그 버튼 (높이 40) */
   tag: 8,
+  /** 입력 필드 등 직사각형 라운드 */
+  input: 16,
 } as const;

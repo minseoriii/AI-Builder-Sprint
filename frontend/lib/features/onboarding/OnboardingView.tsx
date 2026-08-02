@@ -1,22 +1,54 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
+  TextStyle,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Path } from 'react-native-svg';
 
-import { getValidAccessToken } from '@/lib/supabase';
+import {
+  AppText,
+  Colors,
+  FontFamily,
+  LogoIcon,
+  Palette,
+  PolarisIcon,
+  PrimaryButton,
+  PrimaryButtonDimensions,
+  Radii,
+  RoundStarIcon,
+  RoundStarVariant,
+  ScreenContainer,
+  onboardingContentTop,
+  onboardingBackgroundImage,
+  TagButton,
+  withOpacity,
+} from '@/assets_shared';
+import { formatApiErrorAlert } from '@/lib/api/client';
+import {
+  analyzeNorthStar,
+  saveNorthStar,
+  type NorthStarCandidate,
+} from '@/lib/api/onboarding';
+
+function usePrimaryButtonWidth(): number {
+  const { width } = useWindowDimensions();
+  return Math.min(width - 40, PrimaryButtonDimensions.large.width);
+}
 
 // ─── Types (API_SPEC_POLARIS_DEVELOP_2026_08_02) ───────────────────────────
 
@@ -24,35 +56,6 @@ type Step = 1 | 2 | 3 | 4;
 
 /** 백엔드 NORTH_STAR_SELECTED_COUNT — 선택 성단은 정확히 5개 */
 const NORTH_STAR_SELECTED_COUNT = 5;
-
-/** POST /api/v1/onboarding/north-star/analyze → candidates[] item */
-interface Candidate {
-  category: string;
-  score: number;
-  recommended: boolean;
-  reason: string;
-  evidence?: string[];
-}
-
-/** POST /api/v1/onboarding/north-star/analyze — 200 OK */
-interface AnalyzeResponse {
-  analysis_id: string;
-  candidates: Candidate[];
-}
-
-/** PUT /api/v1/onboarding/north-star — 200 OK (OnboardingStatusResponse) */
-interface NorthStarSaveResponse {
-  onboarding_completed: boolean;
-  north_star: {
-    text: string;
-    selected_categories: string[];
-  } | null;
-}
-
-interface ApiErrorDetail {
-  code?: string;
-  message?: string;
-}
 
 // ─── Alerts (web + native) ─────────────────────────────────────────────────
 
@@ -74,322 +77,227 @@ function showAlert(title: string, message: string) {
   Alert.alert(title, message);
 }
 
-// ─── API client ────────────────────────────────────────────────────────────
+// ─── Splash star field ─────────────────────────────────────────────────────
 
-const buildApiUrl = (endpointPath: string): string => {
-  let baseUrl =
-    process.env.EXPO_PUBLIC_API_BASE_URL ||
-    process.env.EXPO_PUBLIC_API_URL ||
-    'http://localhost:8000';
-
-  // 1) 맨 뒤 슬래시(/) 제거
-  baseUrl = baseUrl.replace(/\/+$/, '');
-
-  // 2) baseUrl 끝에 이미 /api/v1이 있으면 제거 (중복 방지)
-  if (baseUrl.endsWith('/api/v1')) {
-    baseUrl = baseUrl.slice(0, -'/api/v1'.length);
-  }
-
-  // 3) endpointPath가 /로 시작하지 않으면 붙여주기
-  const formattedPath = endpointPath.startsWith('/')
-    ? endpointPath
-    : `/${endpointPath}`;
-
-  // 4) baseUrl + formattedPath
-  return `${baseUrl}${formattedPath}`;
-};
-
-async function buildHeaders(): Promise<Record<string, string>> {
-  const accessToken = await getValidAccessToken();
-  return {
-    Accept: 'application/json',
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${accessToken}`,
-  };
-}
-
-/** Map known backend detail.code values to FE guidance messages. */
-function messageForErrorCode(code: string | undefined, fallback: string): string {
-  switch (code) {
-    case 'NORTH_STAR_SEASON_LOCKED':
-      return '현재 계절 동안은 북극성을 수정할 수 없습니다.';
-    case 'INVALID_SELECTION':
-      return '성단은 정확히 5개를 선택해야 합니다.';
-    case 'ANALYSIS_EXPIRED':
-      return '분석 결과가 만료되었습니다. 다시 시도해 주세요.';
-    default:
-      return fallback;
-  }
-}
-
-function extractErrorDetail(data: unknown): ApiErrorDetail {
-  if (!data || typeof data !== 'object' || !('detail' in data)) {
-    return {};
-  }
-  const detail = (data as { detail: unknown }).detail;
-  if (detail && typeof detail === 'object') {
-    const obj = detail as { code?: unknown; message?: unknown };
-    return {
-      code: typeof obj.code === 'string' ? obj.code : undefined,
-      message: typeof obj.message === 'string' ? obj.message : undefined,
-    };
-  }
-  if (typeof detail === 'string') {
-    return { message: detail };
-  }
-  return {};
-}
-
-class ApiRequestError extends Error {
-  url: string;
-  status: number | null;
-  code: string | null;
-
-  constructor(
-    message: string,
-    url: string,
-    status: number | null,
-    code: string | null = null,
-  ) {
-    super(message);
-    this.name = 'ApiRequestError';
-    this.url = url;
-    this.status = status;
-    this.code = code;
-  }
-}
-
-function formatApiErrorAlert(error: unknown): string {
-  if (error instanceof ApiRequestError) {
-    const parts = ['[API 에러]'];
-    if (error.status != null) parts.push(String(error.status));
-    if (error.code) parts.push(error.code);
-    parts.push(error.message);
-    return `${parts.join(' ')}\nURL: ${error.url}`;
-  }
-  if (error instanceof Error && error.message) {
-    return `[API 에러] ${error.message}`;
-  }
-  return '[API 에러] Failed to fetch';
-}
-
-async function apiRequest<T>(
-  method: 'POST' | 'PUT',
-  endpointPath: string,
-  body: unknown,
-): Promise<T> {
-  const url = buildApiUrl(endpointPath);
-  console.log('API request URL:', url);
-
-  const headers = await buildHeaders();
-
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method,
-      headers,
-      body: JSON.stringify(body),
-    });
-  } catch (networkError) {
-    const message =
-      networkError instanceof Error && networkError.message
-        ? networkError.message
-        : 'Failed to fetch';
-    throw new ApiRequestError(message, url, null, null);
-  }
-
-  const raw = await response.text();
-  let data: unknown = null;
-  if (raw) {
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      data = null;
-    }
-  }
-
-  if (!response.ok) {
-    const detail = extractErrorDetail(data);
-    const fallback =
-      detail.message ||
-      (raw.trim()
-        ? raw.length > 200
-          ? `${raw.slice(0, 200)}…`
-          : raw
-        : response.statusText || `요청에 실패했습니다 (${response.status})`);
-    const message = messageForErrorCode(detail.code, fallback);
-    throw new ApiRequestError(
-      message,
-      url,
-      response.status,
-      detail.code ?? null,
-    );
-  }
-
-  return data as T;
-}
-
-/** POST /api/v1/onboarding/north-star/analyze */
-function analyzeNorthStar(text: string) {
-  return apiRequest<AnalyzeResponse>(
-    'POST',
-    '/api/v1/onboarding/north-star/analyze',
-    { text },
-  );
-}
-
-/** PUT /api/v1/onboarding/north-star */
-function saveNorthStar(analysisId: string, selectedCategories: string[]) {
-  return apiRequest<NorthStarSaveResponse>(
-    'PUT',
-    '/api/v1/onboarding/north-star',
-    {
-      analysis_id: analysisId,
-      selected_categories: selectedCategories,
-    },
-  );
-}
-
-// ─── Star Icon ─────────────────────────────────────────────────────────────
-
-function StarIcon({ size = 48 }: { size?: number }) {
-  const s = size;
-  const c = s / 2;
-  const arm = s * 0.42;
-  const thin = s * 0.07;
-
-  return (
-    <Svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} fill="none">
-      <Path
-        d={`M${c},${c - arm} C${c - thin},${c - thin} ${c - arm},${c} ${c},${c + arm} C${c + thin},${c + thin} ${c + arm},${c} ${c},${c - arm}Z`}
-        fill="white"
-      />
-      <Path
-        d={`M${c - arm},${c} C${c - thin},${c - thin} ${c},${c - arm} ${c + arm},${c} C${c + thin},${c + thin} ${c},${c + arm} ${c - arm},${c}Z`}
-        fill="white"
-      />
-    </Svg>
-  );
-}
-
-// ─── Star Field ────────────────────────────────────────────────────────────
-
-const STAR_DOTS = [
-  { x: 0.08, y: 0.07, s: 3 },
-  { x: 0.82, y: 0.12, s: 2 },
-  { x: 0.55, y: 0.05, s: 2 },
-  { x: 0.2, y: 0.22, s: 2 },
-  { x: 0.9, y: 0.35, s: 3 },
-  { x: 0.05, y: 0.48, s: 2 },
-  { x: 0.75, y: 0.58, s: 2 },
-  { x: 0.35, y: 0.78, s: 2 },
-  { x: 0.92, y: 0.72, s: 3 },
-  { x: 0.15, y: 0.88, s: 2 },
-  { x: 0.6, y: 0.92, s: 2 },
-  { x: 0.45, y: 0.18, s: 2 },
+const SPLASH_STARS: { x: number; y: number; variant: RoundStarVariant }[] = [
+  { x: 0.1, y: 0.07, variant: 3 },
+  { x: 0.28, y: 0.12, variant: 2 },
+  { x: 0.52, y: 0.05, variant: 1 },
+  { x: 0.78, y: 0.1, variant: 3 },
+  { x: 0.92, y: 0.18, variant: 2 },
+  { x: 0.06, y: 0.28, variant: 1 },
+  { x: 0.88, y: 0.32, variant: 3 },
+  { x: 0.18, y: 0.42, variant: 2 },
+  { x: 0.72, y: 0.48, variant: 1 },
+  { x: 0.04, y: 0.58, variant: 3 },
+  { x: 0.94, y: 0.62, variant: 2 },
+  { x: 0.32, y: 0.72, variant: 1 },
+  { x: 0.62, y: 0.78, variant: 3 },
+  { x: 0.14, y: 0.88, variant: 2 },
+  { x: 0.48, y: 0.92, variant: 1 },
+  { x: 0.84, y: 0.86, variant: 3 },
 ];
 
-function StarField() {
+function SplashStarField() {
   const { width, height } = useWindowDimensions();
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {STAR_DOTS.map((st, i) => (
+      {SPLASH_STARS.map((star, index) => (
         <View
-          key={i}
-          style={[
-            styles.starDot,
-            {
-              left: width * st.x,
-              top: height * st.y,
-              width: st.s,
-              height: st.s,
-              borderRadius: st.s / 2,
-              opacity: 0.35 + (i % 3) * 0.15,
-            },
-          ]}
-        />
+          key={index}
+          style={{
+            position: 'absolute',
+            left: width * star.x,
+            top: height * star.y,
+          }}
+        >
+          <RoundStarIcon variant={star.variant} />
+        </View>
       ))}
     </View>
   );
 }
 
-function GridOverlay() {
-  const { width, height } = useWindowDimensions();
-  const size = 40;
-  const cols = Math.ceil(width / size);
-  const rows = Math.ceil(height / size);
+function OnboardingBackground() {
+  return (
+    <Image
+      source={onboardingBackgroundImage}
+      style={StyleSheet.absoluteFill}
+      contentFit="cover"
+    />
+  );
+}
+
+const ANALYZE_DOT_COUNT = 8;
+const ANALYZE_SPINNER_SIZE = 56;
+const ANALYZE_SPINNER_RADIUS = 20;
+const ANALYZE_DOT_SIZES = [10, 8.5, 7.5, 6.5, 5.5, 4.5, 4, 3.5];
+const ANALYZE_DOT_OPACITIES = [1, 0.92, 0.78, 0.62, 0.48, 0.36, 0.26, 0.18];
+
+/** 8-dot circular spinner — AI 분석 로딩용 */
+function AnalyzeDotSpinner() {
+  const rotation = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.timing(rotation, {
+        toValue: 1,
+        duration: 900,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [rotation]);
+
+  const spin = rotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const center = ANALYZE_SPINNER_SIZE / 2;
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {Array.from({ length: rows + 1 }).map((_, r) => (
-        <View
-          key={`h-${r}`}
-          style={[styles.gridLineH, { top: r * size, width }]}
-        />
-      ))}
-      {Array.from({ length: cols + 1 }).map((_, c) => (
-        <View
-          key={`v-${c}`}
-          style={[styles.gridLineV, { left: c * size, height }]}
-        />
-      ))}
+    <Animated.View
+      style={[
+        styles.analyzeSpinner,
+        { transform: [{ rotate: spin }] },
+      ]}
+    >
+      {Array.from({ length: ANALYZE_DOT_COUNT }).map((_, index) => {
+        const angle = (index / ANALYZE_DOT_COUNT) * Math.PI * 2 - Math.PI / 2;
+        const dotSize = ANALYZE_DOT_SIZES[index];
+        const left = center + ANALYZE_SPINNER_RADIUS * Math.cos(angle) - dotSize / 2;
+        const top = center + ANALYZE_SPINNER_RADIUS * Math.sin(angle) - dotSize / 2;
+
+        return (
+          <View
+            key={index}
+            style={{
+              position: 'absolute',
+              left,
+              top,
+              width: dotSize,
+              height: dotSize,
+              borderRadius: dotSize / 2,
+              backgroundColor: '#FFFFFF',
+              opacity: ANALYZE_DOT_OPACITIES[index],
+            }}
+          />
+        );
+      })}
+    </Animated.View>
+  );
+}
+
+/** POST /api/v1/onboarding/north-star/analyze 호출 중 전체 화면 로딩 */
+function AnalyzeLoadingScreen() {
+  return (
+    <View style={styles.analyzeLoadingOverlay} pointerEvents="auto">
+      <View style={styles.analyzeLoadingCenter}>
+        <AnalyzeDotSpinner />
+        <AppText style={styles.analyzeLoadingText}>
+          빛의 속도로 분석하는 중...
+        </AppText>
+      </View>
     </View>
   );
 }
 
 // ─── Shared chrome ─────────────────────────────────────────────────────────
 
-function TopSection() {
+function PolarisHeader({
+  title,
+  subtitle,
+  titleStyle,
+}: {
+  title: string;
+  subtitle?: string;
+  titleStyle?: TextStyle;
+}) {
   return (
-    <View style={styles.topSection}>
-      <View style={styles.logoCircleMd}>
-        <StarIcon size={22} />
-      </View>
-      <Text style={styles.logoTextMd}>POLARIS</Text>
-    </View>
-  );
-}
-
-function StepIndicator({ step }: { step: Step }) {
-  if (step <= 1) return null;
-  return (
-    <View style={styles.stepIndicator} pointerEvents="none">
-      {([2, 3, 4] as const).map((s) => (
-        <View
-          key={s}
-          style={[
-            styles.stepBar,
-            step >= s ? styles.stepBarActive : styles.stepBarInactive,
-          ]}
-        />
-      ))}
+    <View style={styles.polarisHeader}>
+      <PolarisIcon size={97} />
+      <AppText
+        variant="emphasis"
+        style={{ ...styles.onboardingTitle, ...titleStyle }}
+      >
+        {title}
+      </AppText>
+      {subtitle ? (
+        <AppText style={styles.onboardingSubtitle}>{subtitle}</AppText>
+      ) : null}
     </View>
   );
 }
 
 // ─── Step 1: Splash ────────────────────────────────────────────────────────
 
-function SplashScreen({ onNext }: { onNext: () => void }) {
+function DismissKeyboardView({ children }: { children: React.ReactNode }) {
   return (
-    <Pressable style={styles.flex} onPress={onNext}>
-      <StarField />
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={styles.flex}>{children}</View>
+    </TouchableWithoutFeedback>
+  );
+}
+
+function SplashScreen({ onNext }: { onNext: () => void }) {
+  const { width } = useWindowDimensions();
+  const logoWidth = Math.min(width - 64, 241);
+  const tapOpacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(tapOpacity, {
+          toValue: 0.3,
+          duration: 900,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(tapOpacity, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [tapOpacity]);
+
+  return (
+    <View style={styles.flex}>
       <View style={styles.splashCenter}>
         <View style={styles.splashBrand}>
-          <View style={styles.logoCircleLg}>
-            <StarIcon size={36} />
-          </View>
-          <Text style={styles.logoTextLg}>POLARIS</Text>
+          <PolarisIcon size={97} />
+          <LogoIcon width={logoWidth} />
         </View>
-        <Text style={styles.splashSlogan}>
-          인간은 우주와 같은 성분으로 이루어져 있습니다.{'\n'}
-          POLARIS 와 함께 자신만의 은하를 키워나가요.
-        </Text>
+        <View style={styles.splashCopy}>
+          <AppText style={styles.splashParagraph}>
+            인간은 우주와 같은 성분으로{'\n'}이루어져 있습니다.
+          </AppText>
+          <AppText style={styles.splashParagraph}>
+            POLARIS 와 함께{'\n'}자신만의 은하를 키워나가요.
+          </AppText>
+        </View>
       </View>
       <View style={styles.splashFooter}>
-        <Text style={styles.tapHint}>탭하여 시작하기</Text>
+        <Pressable
+          onPress={onNext}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="탭하여 시작하기"
+        >
+          <Animated.Text style={[styles.splashTapHint, { opacity: tapOpacity }]}>
+            탭하여 시작하기
+          </Animated.Text>
+        </Pressable>
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -408,45 +316,126 @@ function InputScreen({
   loading: boolean;
   error: string;
 }) {
+  const buttonWidth = usePrimaryButtonWidth();
   const canSubmit = value.trim().length > 0 && !loading;
 
   return (
     <View style={styles.flex}>
-      <StarField />
-      <TopSection />
-      <View style={styles.contentPad}>
-        <Text style={styles.sectionHint}>삶의 방향이 되는 한 문장</Text>
-        <View style={styles.fieldGroup}>
-          <TextInput
-            style={styles.textArea}
-            placeholder="사용자님의 인생 목표를 작성해주세요."
-            placeholderTextColor="rgba(255,255,255,0.25)"
-            multiline
-            textAlignVertical="top"
-            value={value}
-            onChangeText={onChange}
-            editable={!loading}
-          />
-          {error ? <Text style={styles.errorBox}>{error}</Text> : null}
-          <TouchableOpacity
-            style={[styles.primaryBtn, !canSubmit && styles.primaryBtnDisabled]}
-            onPress={onNext}
-            disabled={!canSubmit}
-            activeOpacity={0.7}
-          >
-            {loading ? (
-              <ActivityIndicator color="rgba(255,255,255,0.7)" />
-            ) : (
-              <Text style={styles.primaryBtnText}>성단 확인하기</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+      <ScreenContainer style={styles.flex} topPadding={onboardingContentTop}>
+        <PolarisHeader
+          title="당신의 삶을 이끌어줄 북극성을 정해보세요."
+          subtitle={
+            '흔들리는 순간에도 다시 돌아올 수 있는,\n가장 중요한 가치를 한 문장으로 남겨보아요.'
+          }
+        />
+        <TextInput
+          style={styles.onboardingInput}
+          placeholder="사용자님의 인생 목표를 작성해주세요."
+          placeholderTextColor={withOpacity(Palette.cream, 0.35)}
+          multiline
+          textAlignVertical="top"
+          value={value}
+          onChangeText={onChange}
+          editable={!loading}
+        />
+        {error ? <AppText style={styles.errorBox}>{error}</AppText> : null}
+      </ScreenContainer>
+      <View style={styles.onboardingFooter}>
+        <PrimaryButton
+          size="large"
+          label="북극성 생성"
+          disabled={!canSubmit}
+          onPress={onNext}
+          style={{ width: buttonWidth }}
+        />
       </View>
     </View>
   );
 }
 
 // ─── Step 3: Category selection ────────────────────────────────────────────
+
+const TAG_COUNT_WARNING = '태그는 5가지를 선택해주세요';
+
+function SentenceHighlight({ sentence }: { sentence: string }) {
+  const starSize = 23;
+
+  return (
+    <View style={styles.sentenceHighlight}>
+      <View style={styles.sentenceHighlightRow}>
+        <View style={styles.sentenceHighlightStarStart}>
+          <RoundStarIcon variant={2} size={starSize} />
+        </View>
+        <AppText variant="emphasis" style={styles.sentenceHighlightText}>
+          {sentence}
+        </AppText>
+        <View style={styles.sentenceHighlightStarEnd}>
+          <RoundStarIcon variant={2} size={starSize} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function useShakeAnimation() {
+  const shakeX = useRef(new Animated.Value(0)).current;
+
+  const triggerShake = useCallback(() => {
+    shakeX.setValue(0);
+    Animated.sequence([
+      Animated.timing(shakeX, {
+        toValue: 8,
+        duration: 50,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeX, {
+        toValue: -8,
+        duration: 50,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeX, {
+        toValue: 6,
+        duration: 50,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeX, {
+        toValue: -6,
+        duration: 50,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeX, {
+        toValue: 0,
+        duration: 50,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [shakeX]);
+
+  return { shakeX, triggerShake };
+}
+
+function TagCountWarning({
+  visible,
+  shakeX,
+}: {
+  visible: boolean;
+  shakeX: Animated.Value;
+}) {
+  if (!visible) return null;
+
+  return (
+    <Animated.View
+      style={[styles.tagCountWarning, { transform: [{ translateX: shakeX }] }]}
+    >
+      <AppText style={styles.tagCountWarningText}>{TAG_COUNT_WARNING}</AppText>
+    </Animated.View>
+  );
+}
 
 function CategoryScreen({
   sentence,
@@ -465,82 +454,84 @@ function CategoryScreen({
   onBack: () => void;
   error: string;
 }) {
+  const buttonWidth = usePrimaryButtonWidth();
+  const { shakeX, triggerShake } = useShakeAnimation();
+  const [showTagWarning, setShowTagWarning] = useState(false);
+
+  const triggerTagCountWarning = useCallback(() => {
+    setShowTagWarning(true);
+    triggerShake();
+  }, [triggerShake]);
+
+  const handleTagPress = useCallback(
+    (cat: string) => {
+      if (!selected.includes(cat) && selected.length >= NORTH_STAR_SELECTED_COUNT) {
+        triggerTagCountWarning();
+        return;
+      }
+      setShowTagWarning(false);
+      onToggle(cat);
+    },
+    [onToggle, selected, triggerTagCountWarning],
+  );
+
+  const handleConfirmPress = useCallback(() => {
+    if (selected.length !== NORTH_STAR_SELECTED_COUNT) {
+      triggerTagCountWarning();
+      return;
+    }
+    setShowTagWarning(false);
+    onConfirm();
+  }, [onConfirm, selected.length, triggerTagCountWarning]);
+
   return (
     <View style={styles.flex}>
-      <StarField />
-      <ScrollView
-        style={styles.flex}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        <TopSection />
-        <View style={styles.contentPad}>
-          <Text style={styles.sectionHint}>삶의 방향이 되는 한 문장</Text>
-          <TextInput
-            style={[styles.textArea, styles.textAreaReadonly]}
-            multiline
-            textAlignVertical="top"
-            value={sentence}
-            editable={false}
-          />
+      <ScreenContainer style={styles.flex} contentStyle={styles.flex} topPadding={onboardingContentTop}>
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.categoryScrollContent}
+          keyboardShouldPersistTaps="never"
+        >
+          <PolarisHeader
+          title="당신만의 가치를 5가지 골라보세요."
+          subtitle={
+            '문장을 바탕으로 추천된 가치 중 5가지를 선택해\n나만의 성단을 만들어보세요.'
+          }
+        />
 
-          <View style={styles.categoryBlock}>
-            <Text style={styles.categoryPrompt}>
-              함께 그려갈 성단을 <Text style={styles.categoryPromptEm}>5개</Text> 선택해주세요.
-            </Text>
+        <View style={styles.categoryContent}>
+          <SentenceHighlight sentence={sentence} />
 
-            <View style={styles.tagWrap}>
-              {categories.map((cat) => {
-                const isSelected = selected.includes(cat);
-                return (
-                  <TouchableOpacity
-                    key={cat}
-                    onPress={() => onToggle(cat)}
-                    activeOpacity={0.7}
-                    style={[styles.tag, isSelected && styles.tagSelected]}
-                  >
-                    <Text style={[styles.tagText, isSelected && styles.tagTextSelected]}>
-                      {cat}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {error ? <Text style={styles.errorBox}>{error}</Text> : null}
-
-            <View style={styles.selectCountRow}>
-              <Text style={styles.selectCountLabel}>선택됨</Text>
-              <Text
-                style={[
-                  styles.selectCountValue,
-                  selected.length === NORTH_STAR_SELECTED_COUNT &&
-                    styles.selectCountReady,
-                ]}
-              >
-                {selected.length} / {NORTH_STAR_SELECTED_COUNT}
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.primaryBtn,
-                selected.length !== NORTH_STAR_SELECTED_COUNT &&
-                  styles.primaryBtnDisabled,
-              ]}
-              onPress={onConfirm}
-              disabled={selected.length !== NORTH_STAR_SELECTED_COUNT}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.primaryBtnText}>내 북극성 확정</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={styles.linkBtn}>
-              <Text style={styles.linkBtnText}>{'< 북극성 다시 작성하기'}</Text>
-            </TouchableOpacity>
+          <View style={styles.tagWrap}>
+            {categories.map((cat) => (
+              <TagButton
+                key={cat}
+                label={cat}
+                selected={selected.includes(cat)}
+                onPress={() => handleTagPress(cat)}
+              />
+            ))}
           </View>
+
+          {error ? <AppText style={styles.errorBox}>{error}</AppText> : null}
+
+          <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={styles.linkBtn}>
+            <AppText style={styles.linkBtnText}>문장 다시 쓰기</AppText>
+          </TouchableOpacity>
+
+          <TagCountWarning visible={showTagWarning} shakeX={shakeX} />
         </View>
       </ScrollView>
+      </ScreenContainer>
+
+      <View style={styles.onboardingFooter}>
+        <PrimaryButton
+          size="large"
+          label="성단 확정"
+          onPress={handleConfirmPress}
+          style={{ width: buttonWidth }}
+        />
+      </View>
     </View>
   );
 }
@@ -562,70 +553,58 @@ function ConfirmScreen({
   loading: boolean;
   error: string;
 }) {
-  const row1 = selected.slice(0, 3);
-  const row2 = selected.slice(3);
   const canConfirm =
     selected.length === NORTH_STAR_SELECTED_COUNT && !loading;
+  const buttonWidth = usePrimaryButtonWidth();
 
   return (
     <View style={styles.flex}>
-      <StarField />
+      <ScreenContainer style={styles.flex} contentStyle={styles.flex} topPadding={onboardingContentTop}>
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.confirmScrollContent}
+          keyboardShouldPersistTaps="never"
+        >
+          <PolarisHeader
+          title="이대로 북극성과 성단을 확정할까요?"
+          titleStyle={styles.confirmTitle}
+        />
 
-      <View style={styles.confirmCenter}>
-        <View style={styles.confirmHeader}>
-          <View style={styles.logoCircleMd}>
-            <StarIcon size={22} />
-          </View>
-          <Text style={styles.confirmEyebrow}>북극성</Text>
-        </View>
+        <View style={styles.confirmContent}>
+          <SentenceHighlight sentence={sentence} />
 
-        <View style={styles.confirmSentenceBox}>
-          <Text style={styles.confirmSentence}>{sentence}</Text>
-        </View>
-
-        <View style={styles.confirmClusters}>
-          <Text style={styles.confirmClusterLabel}>성단</Text>
-          <View style={styles.confirmRow}>
-            {row1.map((cat) => (
-              <View key={cat} style={styles.confirmTag}>
-                <Text style={styles.confirmTagText}>{cat}</Text>
-              </View>
+          <View style={styles.tagWrap}>
+            {selected.map((cat) => (
+              <TagButton key={cat} label={cat} selected />
             ))}
           </View>
-          {row2.length > 0 ? (
-            <View style={styles.confirmRow}>
-              {row2.map((cat) => (
-                <View key={cat} style={styles.confirmTag}>
-                  <Text style={styles.confirmTagText}>{cat}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
-        </View>
-      </View>
 
-      <View style={styles.confirmFooter}>
-        {error ? <Text style={styles.errorBox}>{error}</Text> : null}
-        <TouchableOpacity
-          style={[styles.primaryBtn, !canConfirm && styles.primaryBtnDisabled]}
-          onPress={onFinish}
+          {error ? <AppText style={styles.errorBox}>{error}</AppText> : null}
+
+          <TouchableOpacity
+            onPress={onBack}
+            disabled={loading}
+            activeOpacity={0.7}
+            style={styles.linkBtn}
+          >
+            <AppText style={styles.linkBtnText}>다시 설정하기</AppText>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+      </ScreenContainer>
+
+      <View style={styles.onboardingFooter}>
+        <PrimaryButton
+          size="large"
+          label={loading ? undefined : '관측 시작하기'}
           disabled={!canConfirm}
-          activeOpacity={0.7}
+          onPress={onFinish}
+          style={{ width: buttonWidth }}
         >
           {loading ? (
-            <ActivityIndicator color="rgba(255,255,255,0.7)" />
-          ) : (
-            <Text style={styles.primaryBtnText}>북극성 / 성단 확정하기</Text>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={onBack}
-          disabled={loading}
-          activeOpacity={0.7}
-          style={styles.linkBtn}
-        >
-          <Text style={styles.linkBtnText}>{'< 성단 다시 정하기'}</Text>
-        </TouchableOpacity>
+            <ActivityIndicator color={Colors.text.buttonActive} />
+          ) : undefined}
+        </PrimaryButton>
       </View>
     </View>
   );
@@ -637,8 +616,9 @@ export default function OnboardingView() {
   const router = useRouter();
   const [step, setStep] = useState<Step>(1);
   const [sentence, setSentence] = useState('');
+  const [analyzedSentence, setAnalyzedSentence] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [candidates, setCandidates] = useState<NorthStarCandidate[]>([]);
   const [analysisId, setAnalysisId] = useState<string | null>(null);
   const [categoryError, setCategoryError] = useState('');
   const [analyzeError, setAnalyzeError] = useState('');
@@ -653,20 +633,39 @@ export default function OnboardingView() {
 
   const handleToggle = useCallback((cat: string) => {
     setCategoryError('');
-    setSelected((prev) =>
-      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat],
-    );
+    setSelected((prev) => {
+      if (prev.includes(cat)) {
+        return prev.filter((c) => c !== cat);
+      }
+      if (prev.length >= NORTH_STAR_SELECTED_COUNT) {
+        return prev;
+      }
+      return [...prev, cat];
+    });
   }, []);
 
   const handleAnalyze = useCallback(async () => {
     const text = sentence.trim();
     if (!text || analyzing) return;
 
+    // 문장 다시 쓰기 후 내용이 같으면 API 재호출 없이 태그 선택으로
+    if (
+      text === analyzedSentence &&
+      analysisId &&
+      candidates.length > 0
+    ) {
+      setAnalyzeError('');
+      setCategoryError('');
+      setStep(3);
+      return;
+    }
+
     setAnalyzeError('');
     setAnalyzing(true);
     try {
       // POST /api/v1/onboarding/north-star/analyze  { text }
       const data = await analyzeNorthStar(text);
+      setAnalyzedSentence(text);
       setAnalysisId(data.analysis_id);
       setCandidates(data.candidates);
       setSelected([]);
@@ -678,13 +677,10 @@ export default function OnboardingView() {
     } finally {
       setAnalyzing(false);
     }
-  }, [analyzing, sentence]);
+  }, [analysisId, analyzedSentence, analyzing, candidates.length, sentence]);
 
   const handleCategoryConfirm = useCallback(() => {
     if (selected.length !== NORTH_STAR_SELECTED_COUNT) {
-      setCategoryError(
-        `성단은 정확히 ${NORTH_STAR_SELECTED_COUNT}개를 선택해야 합니다.`,
-      );
       return;
     }
     setCategoryError('');
@@ -719,16 +715,12 @@ export default function OnboardingView() {
     }
   }, [analysisId, router, saving, selected]);
 
-  const handleNavBack = useCallback(() => {
-    setCategoryError('');
-    setAnalyzeError('');
-    setStep((s) => (s - 1) as Step);
-  }, []);
-
   return (
     <View style={styles.root}>
-      <GridOverlay />
+      <OnboardingBackground />
+      {step === 1 && <SplashStarField />}
       <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
+        <DismissKeyboardView>
         {step === 1 && <SplashScreen onNext={() => setStep(2)} />}
 
         {step === 2 && (
@@ -743,7 +735,7 @@ export default function OnboardingView() {
 
         {step === 3 && (
           <CategoryScreen
-            sentence={sentence}
+            sentence={analyzedSentence}
             categories={categoryLabels}
             selected={selected}
             onToggle={handleToggle}
@@ -758,7 +750,7 @@ export default function OnboardingView() {
 
         {step === 4 && (
           <ConfirmScreen
-            sentence={sentence}
+            sentence={analyzedSentence}
             selected={selected}
             onFinish={handleFinish}
             onBack={() => setStep(3)}
@@ -766,20 +758,9 @@ export default function OnboardingView() {
             error={saveError}
           />
         )}
-
-        <StepIndicator step={step} />
-
-        {(step === 2 || step === 3) && (
-          <TouchableOpacity
-            style={styles.navBack}
-            onPress={handleNavBack}
-            disabled={analyzing}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.navBackText}>←</Text>
-          </TouchableOpacity>
-        )}
+        </DismissKeyboardView>
       </SafeAreaView>
+      {analyzing && <AnalyzeLoadingScreen />}
     </View>
   );
 }
@@ -799,58 +780,6 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 24,
   },
-  starDot: {
-    position: 'absolute',
-    backgroundColor: '#ffffff',
-  },
-  gridLineH: {
-    position: 'absolute',
-    left: 0,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.025)',
-  },
-  gridLineV: {
-    position: 'absolute',
-    top: 0,
-    width: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.025)',
-  },
-  topSection: {
-    alignItems: 'center',
-    gap: 12,
-    paddingTop: 56,
-    paddingBottom: 24,
-  },
-  logoCircleLg: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoCircleMd: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoTextLg: {
-    color: '#ffffff',
-    fontSize: 36,
-    fontWeight: '300',
-    letterSpacing: 10.8,
-  },
-  logoTextMd: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '300',
-    letterSpacing: 6,
-  },
   splashCenter: {
     flex: 1,
     alignItems: 'center',
@@ -860,106 +789,159 @@ const styles = StyleSheet.create({
   },
   splashBrand: {
     alignItems: 'center',
-    gap: 16,
+    gap: 20,
   },
-  splashSlogan: {
-    fontSize: 14,
+  splashCopy: {
+    gap: 24,
+    alignItems: 'center',
+  },
+  splashParagraph: {
+    textAlign: 'center',
     lineHeight: 28,
-    color: 'rgba(255,255,255,0.6)',
-    fontWeight: '300',
+  },
+  splashTapHint: {
+    fontSize: 20,
+    letterSpacing: 2.4,
+    fontFamily: FontFamily.regular,
+    color: withOpacity('#F8EEC1', 0.55),
     textAlign: 'center',
   },
   splashFooter: {
-    paddingBottom: 56,
+    paddingBottom: 120,
     alignItems: 'center',
   },
-  tapHint: {
-    fontSize: 12,
-    letterSpacing: 2.4,
-    color: 'rgba(255,255,255,0.4)',
+  polarisHeader: {
+    alignItems: 'center',
+    gap: 16,
+    paddingHorizontal: 12,
   },
-  contentPad: {
-    paddingHorizontal: 32,
-    gap: 24,
-    marginTop: 32,
-  },
-  sectionHint: {
-    fontSize: 12,
-    letterSpacing: 1.8,
-    color: 'rgba(255,255,255,0.5)',
+  onboardingTitle: {
+    fontSize: 18,
+    lineHeight: 28,
     textAlign: 'center',
+    fontFamily: FontFamily.bold,
+    color: Palette.cream,
   },
-  fieldGroup: {
-    gap: 12,
+  onboardingSubtitle: {
+    fontSize: 14,
+    lineHeight: 24,
+    textAlign: 'center',
+    color: withOpacity(Palette.cream, 0.55),
   },
-  textArea: {
-    width: '100%',
-    minHeight: 112,
+  onboardingBody: {
+    flex: 1,
+  },
+  onboardingInput: {
+    marginTop: 24,
+    minHeight: 80,
+    maxHeight: 140,
+    borderRadius: Radii.input,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 0,
+    borderColor: withOpacity(Palette.cream, 0.25),
+    backgroundColor: withOpacity('#06101f', 0.55),
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 14,
     lineHeight: 24,
-    color: '#ffffff',
+    fontFamily: FontFamily.regular,
+    color: Palette.cream,
   },
-  textAreaReadonly: {
-    color: 'rgba(255,255,255,0.6)',
+  onboardingInputCompact: {
+    flex: 0,
+    minHeight: 96,
+    maxHeight: 120,
+    marginTop: 0,
   },
-  primaryBtn: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-    paddingVertical: 12,
+  onboardingFooter: {
+    paddingHorizontal: 20,
+    paddingBottom: 32,
+    alignItems: 'center',
+    gap: 12,
+  },
+  analyzeSpinner: {
+    width: ANALYZE_SPINNER_SIZE,
+    height: ANALYZE_SPINNER_SIZE,
+  },
+  analyzeLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 44,
+    zIndex: 20,
   },
-  primaryBtnDisabled: {
-    opacity: 0.25,
+  analyzeLoadingCenter: {
+    alignItems: 'center',
+    gap: ANALYZE_SPINNER_SIZE,
   },
-  primaryBtnText: {
+  analyzeLoadingText: {
+    fontSize: 16,
+    lineHeight: 24,
+    fontFamily: FontFamily.medium,
+    color: Palette.cream,
+    textAlign: 'center',
+  },
+  contentPad: {
+    paddingHorizontal: 32,
+    gap: 24,
+    marginTop: 8,
+  },
+  textAreaReadonly: {
+    color: withOpacity(Palette.cream, 0.6),
+  },
+  categoryScrollContent: {
+    flexGrow: 1,
+    paddingBottom: 24,
+  },
+  categoryContent: {
+    paddingHorizontal: 20,
+    gap: 28,
+    marginTop: 8,
+  },
+  sentenceHighlight: {
+    width: '100%',
+    paddingHorizontal: 8,
+  },
+  sentenceHighlightRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    width: '100%',
+  },
+  sentenceHighlightStarStart: {
+    alignSelf: 'flex-start',
+  },
+  sentenceHighlightStarEnd: {
+    alignSelf: 'flex-end',
+  },
+  sentenceHighlightText: {
+    flex: 1,
+    flexShrink: 1,
+    fontSize: 16,
+    lineHeight: 26,
+    textAlign: 'center',
+    fontFamily: FontFamily.bold,
+    color: Palette.cream,
+    paddingHorizontal: 8,
+  },
+  tagCountWarning: {
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  tagCountWarningText: {
     fontSize: 12,
-    letterSpacing: 1.8,
-    color: 'rgba(255,255,255,0.7)',
+    lineHeight: 18,
+    textAlign: 'center',
+    color: Palette.cream,
+    fontFamily: FontFamily.medium,
   },
   categoryBlock: {
     gap: 16,
-  },
-  categoryPrompt: {
-    fontSize: 12,
-    lineHeight: 20,
-    color: 'rgba(255,255,255,0.5)',
-    textAlign: 'center',
-  },
-  categoryPromptEm: {
-    color: 'rgba(255,255,255,0.8)',
   },
   tagWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
     justifyContent: 'center',
-  },
-  tag: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-    backgroundColor: 'transparent',
-  },
-  tagSelected: {
-    backgroundColor: '#ffffff',
-    borderColor: '#ffffff',
-  },
-  tagText: {
-    fontSize: 12,
-    letterSpacing: 0.4,
-    color: 'rgba(255,255,255,0.6)',
-  },
-  tagTextSelected: {
-    color: '#000000',
+    alignContent: 'center',
+    width: '100%',
   },
   selectCountRow: {
     flexDirection: 'row',
@@ -969,123 +951,46 @@ const styles = StyleSheet.create({
   },
   selectCountLabel: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.3)',
+    color: withOpacity(Palette.cream, 0.35),
   },
   selectCountValue: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.3)',
+    color: withOpacity(Palette.cream, 0.35),
   },
   selectCountReady: {
-    color: 'rgba(255,255,255,0.6)',
+    color: Palette.cream,
   },
   linkBtn: {
-    paddingBottom: 32,
+    paddingBottom: 8,
     alignItems: 'center',
+    marginTop: 4,
   },
   linkBtnText: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.3)',
+    color: withOpacity(Palette.cream, 0.35),
     textDecorationLine: 'underline',
   },
   errorBox: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
+    color: Palette.cream,
     textAlign: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: withOpacity(Palette.cream, 0.25),
     paddingVertical: 8,
     paddingHorizontal: 16,
+    marginHorizontal: 32,
   },
-  confirmCenter: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 32,
-    paddingHorizontal: 32,
+  confirmScrollContent: {
+    flexGrow: 1,
+    paddingBottom: 24,
   },
-  confirmHeader: {
-    alignItems: 'center',
-    gap: 12,
-  },
-  confirmEyebrow: {
-    fontSize: 12,
-    letterSpacing: 3,
-    color: 'rgba(255,255,255,0.4)',
-  },
-  confirmSentenceBox: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    width: '100%',
+  confirmContent: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    gap: 28,
+    marginTop: 8,
   },
-  confirmSentence: {
-    fontSize: 14,
-    lineHeight: 28,
-    color: 'rgba(255,255,255,0.8)',
-    textAlign: 'center',
-  },
-  confirmClusters: {
-    width: '100%',
-    alignItems: 'center',
-    gap: 12,
-  },
-  confirmClusterLabel: {
-    fontSize: 12,
-    letterSpacing: 1.8,
-    color: 'rgba(255,255,255,0.3)',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  confirmRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  confirmTag: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  confirmTagText: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  confirmFooter: {
-    paddingHorizontal: 32,
-    paddingBottom: 40,
-    gap: 12,
-  },
-  stepIndicator: {
-    position: 'absolute',
-    top: 24,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  stepBar: {
-    height: 1,
-  },
-  stepBarActive: {
-    width: 24,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-  },
-  stepBarInactive: {
-    width: 12,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-  },
-  navBack: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    padding: 8,
-  },
-  navBackText: {
-    color: 'rgba(255,255,255,0.25)',
-    fontSize: 12,
-    letterSpacing: 2,
+  confirmTitle: {
+    fontFamily: FontFamily.medium,
+    fontWeight: '500',
   },
 });

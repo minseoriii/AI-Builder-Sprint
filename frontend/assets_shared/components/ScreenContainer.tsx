@@ -7,6 +7,8 @@ export interface ScreenContainerProps extends ViewProps {
   children: ReactNode;
   /** 기본 top(65) 여백 적용 여부 */
   withTopPadding?: boolean;
+  /** withTopPadding=true 일 때 사용할 상단 여백 (기본 ScreenLayout.top) */
+  topPadding?: number;
   /** 기본 horizontal(20) 여백 적용 여부 */
   withHorizontalPadding?: boolean;
   style?: ViewStyle;
@@ -17,6 +19,7 @@ export interface ScreenContainerProps extends ViewProps {
 export function ScreenContainer({
   children,
   withTopPadding = true,
+  topPadding = ScreenLayout.top,
   withHorizontalPadding = true,
   style,
   contentStyle,
@@ -27,9 +30,9 @@ export function ScreenContainer({
       style={[
         styles.root,
         withHorizontalPadding && styles.horizontal,
-        withTopPadding && styles.top,
         style,
         contentStyle,
+        withTopPadding && { paddingTop: topPadding },
       ]}
       {...rest}
     >
@@ -44,9 +47,6 @@ const styles = StyleSheet.create({
   },
   horizontal: {
     paddingHorizontal: ScreenLayout.horizontal,
-  },
-  top: {
-    paddingTop: ScreenLayout.top,
   },
 });
 

@@ -5,7 +5,7 @@ import {
   getClusterLabelColor,
 } from '../clusters';
 import { FontFamily } from '../typography';
-import { ClusterSvgIcon } from './ClusterIcons';
+import { ClusterPngIcon } from '../stars_png';
 
 export interface ClusterIconProps {
   /** ic_cluster1 ~ ic_cluster5 */
@@ -19,7 +19,7 @@ export interface ClusterIconProps {
 }
 
 /**
- * 성단 PNG + 하단 라벨
+ * 성단 아이콘 + 하단 라벨
  * 라벨 색상은 cluster 번호별 고정 (ic_cluster1 #FFAEAE … ic_cluster5 #E4B2FF)
  */
 export function ClusterIcon({
@@ -34,7 +34,7 @@ export function ClusterIcon({
 
   const content = (
     <View style={[styles.root, style]}>
-      <ClusterSvgIcon cluster={cluster} size={iconSize} />
+      <ClusterPngIcon cluster={cluster} size={iconSize} />
       <Text
         style={[styles.label, { color: labelColor }, labelStyle]}
         numberOfLines={1}
