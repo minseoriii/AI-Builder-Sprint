@@ -1,4 +1,4 @@
-# Polaris API (가치 정렬 AI 저널) — Backend
+# Polaris API  — Backend
 
 FastAPI 기반 백엔드 서버입니다. Supabase Auth·PostgreSQL과 Upstage Solar Pro 3를 사용합니다.
 
@@ -331,24 +331,5 @@ ruff check .
 | Swagger | http://127.0.0.1:8000/docs |
 | ReDoc | http://127.0.0.1:8000/redoc |
 | Postman Collection | `../docs/postman/POLARIS_API.postman_collection.json` |
-
-### 주요 API (prefix: `/api/v1`)
-
-| Method | Path | 설명 |
-|--------|------|------|
-| GET | `/ready` | 환경변수 설정 상태 |
-| GET | `/me/onboarding` | 온보딩 상태 |
-| POST | `/onboarding/north-star/analyze` | 북극성 AI 분석 |
-| PUT | `/onboarding/north-star` | 북극성 선택 저장 |
-| GET | `/home` | 홈 화면 데이터 |
-| POST | `/daily-records/analyze` | 일일 기록 AI 분석 |
-| PUT | `/daily-records/{id}/details` | 기록 상세 보완 |
-| POST | `/daily-records/{id}/confirm` | 기록 확정 |
-| GET | `/comet-recommendations/current` | 현재 혜성 추천 |
-| POST | `/comet-recommendations/generate` | 혜성 추천 생성 |
-| GET/POST/PUT/DELETE | `/comets/...` | 혜성(행동) CRUD |
-| GET | `/stars/...` | 별(기록) 조회 |
-| GET | `/galaxy/overview` | 은하 개요 |
-| POST/GET | `/galaxy/reports/...` | 계절 리포트 |
 
 인증이 필요한 API는 헤더에 `Authorization: Bearer <SUPABASE_ACCESS_TOKEN>`을 포함합니다.
