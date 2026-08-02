@@ -381,7 +381,7 @@ function HomeScreen() {
   const center = ORBIT_R + ORBIT_PAD;
 
   const handleCreateStar = () => {
-    console.log('[Polaris] 별 생성하기 clicked — navigate to star creation flow');
+    router.push('/star-record');
   };
 
   return (
