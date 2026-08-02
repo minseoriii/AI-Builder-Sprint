@@ -44,7 +44,7 @@ export interface PrimaryButtonProps {
   textStyle?: TextStyle;
   /**
    * large 전용: 디자인 좌표 (20, 820)에 절대 배치.
-   * 기본 true. 기기 화면 비율로 스케일됩니다.
+   * 기본 false(문서 흐름). 별기록 등 시안 고정 배치만 true.
    */
   pinnedToLargeTop?: boolean;
 }
@@ -63,7 +63,7 @@ export function PrimaryButton({
   onPress,
   style,
   textStyle,
-  pinnedToLargeTop = true,
+  pinnedToLargeTop = false,
 }: PrimaryButtonProps) {
   const config = SIZE_CONFIG[size];
   const isActive = !disabled;

@@ -26,7 +26,6 @@ import {
   ClusterIcon,
   Colors,
   FontFamily,
-  getClusterLabelColor,
   PrimaryButton,
   ScreenContainer,
   ScreenLayout,
@@ -90,6 +89,7 @@ const TAG_ICON_SOURCES: Record<keyof Tags, number> = {
 };
 
 const PEN_ICON = require('@/assets_shared/images/Group 90.png');
+const COMPLETE_STAR_IMAGE = require('@/assets_shared/images/ic_shapestar4.png');
 
 /** STATE1/2 타이틀·서브카피 폭 계산용 — DesignFrame(412) 기준 좌우 대칭 여백 */
 const TITLE_MAX_WIDTH = 412 - ScreenLayout.titleX * 2;
@@ -452,7 +452,7 @@ function BaseScreen({
         </View>
       )}
 
-      <PrimaryButton label="기록 분석하기" onPress={handleSubmit} />
+      <PrimaryButton label="기록 분석하기" pinnedToLargeTop onPress={handleSubmit} />
     </View>
   );
 }
@@ -550,7 +550,7 @@ function SupplementScreen({
         ]}
       />
 
-      <PrimaryButton label="확인" onPress={() => onNext(text)} />
+      <PrimaryButton label="확인" pinnedToLargeTop onPress={() => onNext(text)} />
     </View>
   );
 }
@@ -713,7 +713,7 @@ function ConfirmScreen({
         <View style={{ height: y(ScreenLayout.largeButtonHeight) + y(40) }} />
       </ScrollView>
 
-      <PrimaryButton label="별 생성하기" onPress={onNext} />
+      <PrimaryButton label="별 생성하기" pinnedToLargeTop onPress={onNext} />
 
       {editingRow && editingKey && (
         <TagEditModal
@@ -732,12 +732,10 @@ function ConfirmScreen({
 
 function CompleteScreen({
   cluster,
-  clusterId,
   starIndex,
   onHome,
 }: {
   cluster: string;
-  clusterId: ClusterIndex;
   starIndex: number;
   onHome: () => void;
 }) {
@@ -746,7 +744,6 @@ function CompleteScreen({
   const month = now.getMonth() + 1;
   const day = now.getDate();
   const season = getSeasonGalaxy();
-  const clusterColor = getClusterLabelColor(clusterId);
 
   const fadeIn = useRef(new Animated.Value(0)).current;
   const slideUp = useRef(new Animated.Value(24)).current;
@@ -776,29 +773,25 @@ function CompleteScreen({
           { opacity: fadeIn, transform: [{ translateY: slideUp }] },
         ]}
       >
-        <View style={styles.completeStarWrap}>
-          <View style={styles.starGlow} />
-          <StarIcon size={56} animated />
-        </View>
+        <AppText variant="emphasis" style={styles.confirmTitle}>
+          새로운 별이 탄생했어요!
+        </AppText>
+        <AppText style={styles.confirmSubtitle}>
+          오늘의 빛이 은하에 기록되었어요.
+        </AppText>
 
-        <Text style={styles.completeTitle}>새로운 별이 탄생했어요!</Text>
-        <Text style={styles.completeSubtitle}>오늘의 빛이 은하에 기록되었어요.</Text>
+        <Image
+          source={COMPLETE_STAR_IMAGE}
+          style={styles.completeStarImage}
+          resizeMode="contain"
+        />
 
-        <View style={styles.metaCard}>
-          <Text style={styles.metaLine}>
-            {year}년 {month}월 {day}일
-          </Text>
-          <Text style={styles.metaLine}>{season}의 은하</Text>
-          <Text style={styles.metaEmphasis}>
-            <Text style={{ color: clusterColor }}>{cluster}</Text>
-            {` 성단의 ${starIndex}번째 별`}
-          </Text>
-        </View>
+        <AppText style={styles.completeMeta}>
+          {`${year}년 ${month}월 ${day}일\n${season}의 은하\n${cluster} 성단의 ${starIndex}번째 별`}
+        </AppText>
       </Animated.View>
 
-      <View style={styles.footer}>
-        <BottomButton label="메인으로 돌아가기" onPress={onHome} />
-      </View>
+      <PrimaryButton label="확인" pinnedToLargeTop onPress={onHome} />
     </SafeAreaView>
   );
 }
@@ -883,7 +876,6 @@ export default function StarRecordView() {
           {screen === 'complete' && (
             <CompleteScreen
               cluster={cluster}
-              clusterId={clusterId}
               starIndex={starIndex}
               onHome={handleHome}
             />
@@ -1193,50 +1185,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
-    gap: 8,
   },
-  completeStarWrap: {
-    marginBottom: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+  completeStarImage: {
+    width: 160,
+    height: 160,
+    marginTop: 8,
+    marginBottom: 24,
   },
-  starGlow: {
-    position: 'absolute',
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: 'rgba(240,192,64,0.18)',
-  },
-  completeTitle: {
-    color: COLORS.white,
-    fontSize: 22,
-    fontWeight: '700',
+  completeMeta: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: 'rgba(255,249,221,0.8)',
     textAlign: 'center',
-  },
-  completeSubtitle: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  metaCard: {
-    width: '100%',
-    borderRadius: 16,
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    backgroundColor: COLORS.card,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-  },
-  metaLine: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  metaEmphasis: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
-    fontWeight: '500',
+    alignSelf: 'stretch',
   },
 });
