@@ -247,7 +247,7 @@ def confirm_daily_record(
         db.flush()
 
         ai_tag_snapshot = {
-            dimension: data.get("values", [])
+            dimension: data.get("raw_values", data.get("values", []))
             for dimension, data in analysis.ai_extracted_tags.items()
         }
         for dimension, values in analysis.final_tags.items():

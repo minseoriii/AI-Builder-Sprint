@@ -14,6 +14,8 @@ from app.schemas.daily_record import (
     DailyRecordClassificationAIResponse,
     DailyRecordExtractionAIResponse,
     DimensionExtraction,
+    DimensionStatus,
+    NormalizedCandidate,
     validate_tags_snapshot,
 )
 from app.services.daily_record_classification import validate_classification_evidence
@@ -43,28 +45,79 @@ PARTIAL_TAGS = {
 def _full_extraction_response():
     return DailyRecordExtractionAIResponse(
         dimensions={
-            "PERSON": DimensionExtraction(values=["민서"], evidence=["민서랑"]),
-            "PLACE": DimensionExtraction(values=["아웃백"], evidence=["아웃백에서"]),
-            "ACTIVITY": DimensionExtraction(
-                values=["치킨 먹음", "대화"], evidence=["치킨 먹음", "얘기함"]
+            "PERSON": DimensionExtraction(
+                status=DimensionStatus.PRESENT,
+                raw_values=["민서"],
+                normalized_candidates=[NormalizedCandidate(tag="친구", score=0.9)],
+                evidence=["민서랑"],
             ),
-            "TIME": DimensionExtraction(values=["오랜만에"], evidence=["오랜만에"]),
-            "EMOTION": DimensionExtraction(values=["편안함"], evidence=["편하게"]),
+            "PLACE": DimensionExtraction(
+                status=DimensionStatus.PRESENT,
+                raw_values=["아웃백"],
+                normalized_candidates=[NormalizedCandidate(tag="음식점", score=0.9)],
+                evidence=["아웃백에서"],
+            ),
+            "ACTIVITY": DimensionExtraction(
+                status=DimensionStatus.PRESENT,
+                raw_values=["치킨 먹음", "대화"],
+                normalized_candidates=[
+                    NormalizedCandidate(tag="함께 식사", score=0.9),
+                    NormalizedCandidate(tag="대화", score=0.85),
+                ],
+                evidence=["치킨 먹음", "얘기함"],
+            ),
+            "TIME": DimensionExtraction(
+                status=DimensionStatus.PRESENT,
+                raw_values=["오랜만에"],
+                normalized_candidates=[NormalizedCandidate(tag="오랜만에", score=1.0)],
+                evidence=["오랜만에"],
+            ),
+            "EMOTION": DimensionExtraction(
+                status=DimensionStatus.PRESENT,
+                raw_values=["편안함"],
+                normalized_candidates=[NormalizedCandidate(tag="편안함", score=0.95)],
+                evidence=["편하게"],
+            ),
         },
-        missing_dimensions=[],
+        missing_question_types=[],
     )
 
 
 def _partial_extraction_response():
     return DailyRecordExtractionAIResponse(
         dimensions={
-            "PERSON": DimensionExtraction(values=["민서"], evidence=["민서랑"]),
-            "PLACE": DimensionExtraction(values=[], evidence=[]),
-            "ACTIVITY": DimensionExtraction(values=["대화"], evidence=["얘기함"]),
-            "TIME": DimensionExtraction(values=[], evidence=[]),
-            "EMOTION": DimensionExtraction(values=["편안함"], evidence=["편하게"]),
+            "PERSON": DimensionExtraction(
+                status=DimensionStatus.PRESENT,
+                raw_values=["민서"],
+                normalized_candidates=[NormalizedCandidate(tag="친구", score=0.9)],
+                evidence=["민서랑"],
+            ),
+            "PLACE": DimensionExtraction(
+                status=DimensionStatus.MISSING,
+                raw_values=[],
+                normalized_candidates=[],
+                evidence=[],
+            ),
+            "ACTIVITY": DimensionExtraction(
+                status=DimensionStatus.PRESENT,
+                raw_values=["대화"],
+                normalized_candidates=[NormalizedCandidate(tag="대화", score=0.9)],
+                evidence=["얘기함"],
+            ),
+            "TIME": DimensionExtraction(
+                status=DimensionStatus.MISSING,
+                raw_values=[],
+                normalized_candidates=[],
+                evidence=[],
+            ),
+            "EMOTION": DimensionExtraction(
+                status=DimensionStatus.PRESENT,
+                raw_values=["편안함"],
+                normalized_candidates=[NormalizedCandidate(tag="편안함", score=0.95)],
+                evidence=["편하게"],
+            ),
         },
-        missing_dimensions=["PLACE", "TIME"],
+        missing_question_types=["PLACE", "TIME"],
     )
 
 
@@ -453,13 +506,33 @@ def test_extraction_ai_invalid_dimension():
     with pytest.raises(ValueError):
         DailyRecordExtractionAIResponse(
             dimensions={
-                "PERSON": DimensionExtraction(values=["민서"], evidence=["민서랑"]),
-                "PLACE": DimensionExtraction(values=["아웃백"], evidence=["아웃백에서"]),
-                "ACTIVITY": DimensionExtraction(values=["대화"], evidence=["얘기함"]),
-                "TIME": DimensionExtraction(values=["오랜만에"], evidence=["오랜만에"]),
-                "WRONG": DimensionExtraction(values=["x"], evidence=["x"]),
+                "PERSON": DimensionExtraction(
+                    status=DimensionStatus.PRESENT,
+                    raw_values=["민서"],
+                    evidence=["민서랑"],
+                ),
+                "PLACE": DimensionExtraction(
+                    status=DimensionStatus.PRESENT,
+                    raw_values=["아웃백"],
+                    evidence=["아웃백에서"],
+                ),
+                "ACTIVITY": DimensionExtraction(
+                    status=DimensionStatus.PRESENT,
+                    raw_values=["대화"],
+                    evidence=["얘기함"],
+                ),
+                "TIME": DimensionExtraction(
+                    status=DimensionStatus.PRESENT,
+                    raw_values=["오랜만에"],
+                    evidence=["오랜만에"],
+                ),
+                "WRONG": DimensionExtraction(
+                    status=DimensionStatus.PRESENT,
+                    raw_values=["x"],
+                    evidence=["x"],
+                ),
             },
-            missing_dimensions=[],
+            missing_question_types=[],
         )
 
 

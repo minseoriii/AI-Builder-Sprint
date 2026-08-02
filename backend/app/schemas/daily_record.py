@@ -1,7 +1,7 @@
 from datetime import date
 from enum import StrEnum
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.core.constants import (
     CONSTELLATION_CATEGORIES,
@@ -34,14 +34,28 @@ class TagSource(StrEnum):
     USER = "USER"
 
 
+class DimensionStatus(StrEnum):
+    PRESENT = "PRESENT"
+    MISSING = "MISSING"
+    AMBIGUOUS = "AMBIGUOUS"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+
+
+class NormalizedCandidate(BaseModel):
+    tag: str
+    score: float = Field(ge=0.0, le=1.0)
+
+
 class DimensionExtraction(BaseModel):
-    values: list[str]
+    status: DimensionStatus
+    raw_values: list[str]
+    normalized_candidates: list[NormalizedCandidate] = Field(default_factory=list)
     evidence: list[str]
 
 
 class DailyRecordExtractionAIResponse(BaseModel):
     dimensions: dict[str, DimensionExtraction]
-    missing_dimensions: list[str]
+    missing_question_types: list[str]
 
     @field_validator("dimensions")
     @classmethod
@@ -54,11 +68,38 @@ class DailyRecordExtractionAIResponse(BaseModel):
         extra = set(value.keys()) - set(DAILY_RECORD_DIMENSIONS)
         if extra:
             raise ValueError(f"허용되지 않은 차원: {', '.join(sorted(extra))}")
+
+        for dimension, extraction in value.items():
+            if len(extraction.normalized_candidates) > 3:
+                raise ValueError(
+                    f"{dimension} 차원의 정규화 후보는 최대 3개까지 가능합니다."
+                )
         return value
 
-    @field_validator("missing_dimensions")
+    @model_validator(mode="after")
+    def filter_normalized_candidates(self) -> "DailyRecordExtractionAIResponse":
+        from app.core.dimension_tags import DIMENSION_NORMALIZED_TAGS
+
+        filtered_dimensions: dict[str, DimensionExtraction] = {}
+        for dimension in DAILY_RECORD_DIMENSIONS:
+            extraction = self.dimensions[dimension]
+            allowed = DIMENSION_NORMALIZED_TAGS.get(dimension, frozenset())
+            valid_candidates = [
+                candidate
+                for candidate in extraction.normalized_candidates
+                if candidate.tag in allowed
+            ][:3]
+            if valid_candidates != extraction.normalized_candidates:
+                extraction = extraction.model_copy(
+                    update={"normalized_candidates": valid_candidates}
+                )
+            filtered_dimensions[dimension] = extraction
+        self.dimensions = filtered_dimensions
+        return self
+
+    @field_validator("missing_question_types")
     @classmethod
-    def validate_missing_dimensions(cls, value: list[str]) -> list[str]:
+    def validate_missing_question_types(cls, value: list[str]) -> list[str]:
         for dimension in value:
             if dimension not in DAILY_RECORD_DIMENSIONS:
                 raise ValueError(f"허용되지 않은 차원: {dimension}")

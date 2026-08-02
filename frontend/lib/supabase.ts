@@ -51,8 +51,28 @@ export const supabase = new Proxy({} as SupabaseClient, {
 
 /**
  * Returns a valid Supabase access token.
- * Reuses the current session when present; otherwise signs in anonymously.
+ * Reuses the current session when present; refreshes when expiring soon.
+ * Otherwise signs in anonymously.
  */
+const TOKEN_REFRESH_BUFFER_MS = 60_000;
+
+function isExpiringSoon(expiresAt: number | undefined): boolean {
+  if (!expiresAt) return false;
+  return expiresAt * 1000 <= Date.now() + TOKEN_REFRESH_BUFFER_MS;
+}
+
+export async function refreshAccessToken(): Promise<string> {
+  const { data, error } = await supabase.auth.refreshSession();
+  if (error) {
+    throw new Error(error.message || '세션을 갱신할 수 없습니다.');
+  }
+  const token = data.session?.access_token;
+  if (!token) {
+    throw new Error('세션 갱신 후 access_token을 받지 못했습니다.');
+  }
+  return token;
+}
+
 export async function getValidAccessToken(): Promise<string> {
   const { data: sessionData, error: sessionError } =
     await supabase.auth.getSession();
@@ -63,9 +83,19 @@ export async function getValidAccessToken(): Promise<string> {
     );
   }
 
-  const existing = sessionData.session?.access_token;
-  if (existing) {
-    return existing;
+  const session = sessionData.session;
+  if (session?.access_token) {
+    if (!isExpiringSoon(session.expires_at)) {
+      return session.access_token;
+    }
+    if (session.refresh_token) {
+      try {
+        return await refreshAccessToken();
+      } catch {
+        return session.access_token;
+      }
+    }
+    return session.access_token;
   }
 
   const { data, error } = await supabase.auth.signInAnonymously();
