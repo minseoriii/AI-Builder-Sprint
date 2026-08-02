@@ -17,6 +17,7 @@ import {
   BottomNavigationBar,
   ResponsiveScreen,
   createResponsiveStylesContext,
+  useAutoRefreshOnFocus,
   useResponsive,
 } from '@/assets_shared';
 
@@ -1065,6 +1066,15 @@ export default function GalaxyView() {
   const [clusterIdx, setClusterIdx] = useState(0);
   const [constIdx, setConstIdx] = useState(0);
   const [starIdx, setStarIdx] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useAutoRefreshOnFocus(() => {
+    setRefreshKey((key) => key + 1);
+    setCurrentView('GALLERY');
+    setClusterIdx(0);
+    setConstIdx(0);
+    setStarIdx(0);
+  });
 
   const cluster = CLUSTERS[clusterIdx];
   const constellation = cluster.constellations[constIdx];
@@ -1107,7 +1117,7 @@ export default function GalaxyView() {
 
   return (
     <StylesProvider styles={styles}>
-      <ResponsiveScreen style={{ backgroundColor: COLORS.bgDeep }}>
+      <ResponsiveScreen key={refreshKey} style={{ backgroundColor: COLORS.bgDeep }}>
         <LinearGradient
           colors={['#0F1430', '#0B0D1B', '#090C20', '#0D0F24']}
           locations={[0, 0.35, 0.65, 1]}

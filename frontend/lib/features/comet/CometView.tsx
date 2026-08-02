@@ -1,9 +1,11 @@
+import { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   AppText,
+  AutoRefreshOnFocus,
   BottomNavigationBar,
   ResponsiveScreen,
   useResponsiveStyles,
@@ -31,23 +33,30 @@ const STYLE_DEF = {
 
 export default function CometView() {
   const styles = useResponsiveStyles(STYLE_DEF);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshKey((key) => key + 1);
+  }, []);
 
   return (
-    <ResponsiveScreen style={{ backgroundColor: '#06101f' }}>
-      <LinearGradient
-        colors={['#0d1f48', '#081432', '#060e28']}
-        locations={[0, 0.45, 1]}
-        style={StyleSheet.absoluteFill}
-      />
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <View style={styles.content}>
-          <AppText variant="emphasis" style={styles.title}>
-            혜성관측소
-          </AppText>
-          <AppText style={styles.subtitle}>준비 중입니다.</AppText>
-        </View>
-      </SafeAreaView>
-      <BottomNavigationBar activeTab="comet" />
-    </ResponsiveScreen>
+    <AutoRefreshOnFocus onRefresh={handleRefresh}>
+      <ResponsiveScreen key={refreshKey} style={{ backgroundColor: '#06101f' }}>
+        <LinearGradient
+          colors={['#0d1f48', '#081432', '#060e28']}
+          locations={[0, 0.45, 1]}
+          style={StyleSheet.absoluteFill}
+        />
+        <SafeAreaView style={styles.safe} edges={['top']}>
+          <View style={styles.content}>
+            <AppText variant="emphasis" style={styles.title}>
+              혜성관측소
+            </AppText>
+            <AppText style={styles.subtitle}>준비 중입니다.</AppText>
+          </View>
+        </SafeAreaView>
+        <BottomNavigationBar activeTab="comet" />
+      </ResponsiveScreen>
+    </AutoRefreshOnFocus>
   );
 }
