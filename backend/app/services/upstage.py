@@ -85,6 +85,7 @@ class UpstageClient:
                 model=self.model,
                 messages=messages,
                 timeout=self.timeout,
+                max_tokens=4096,
             )
         except APIConnectionError as exc:
             raise AIServiceError() from exc
@@ -105,10 +106,13 @@ class UpstageClient:
         content = self._chat(system_prompt, user_prompt)
         try:
             return validate_ai_response(content, schema)
-        except AIResponseInvalidError:
+        except AIResponseInvalidError as exc:
             retry_hint = (
                 "이전 응답 형식이 올바르지 않습니다. "
-                "지정된 JSON 스키마만 반환하세요. Markdown 코드 블록 없이 순수 JSON만 출력하세요."
+                f"오류: {exc}. "
+                "candidates는 정확히 7개여야 하며 score는 내림차순, "
+                "recommended true는 1~3개입니다. "
+                "Markdown 코드 블록 없이 순수 JSON만 출력하세요."
             )
             retry_content = self._chat(
                 system_prompt,

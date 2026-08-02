@@ -8,7 +8,6 @@ import {
 } from 'react-native';
 
 import { Colors } from '../colors';
-import { Radii } from '../radii';
 import { FontFamily, FontSize } from '../typography';
 
 export type PrimaryButtonSize = 'large' | 'medium' | 'small';
@@ -63,7 +62,7 @@ export function PrimaryButton({
         {
           width: config.width,
           height: config.height,
-          borderRadius: Radii.button,
+          borderRadius: config.height / 2,
           backgroundColor: Colors.button.fill,
           borderColor: isActive
             ? Colors.button.borderActive

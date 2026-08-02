@@ -48,7 +48,7 @@ export const Colors = {
     borderInactive: withOpacity(Palette.cream, 0.6),
     borderActive: Palette.cream,
   },
-  /** ic_cluster1~5 SVG 하단 라벨 텍스트 */
+  /** ic_cluster1~5 아이콘 하단 라벨 텍스트 */
   clusterLabel: {
     1: Palette.cluster1,
     2: Palette.cluster2,
