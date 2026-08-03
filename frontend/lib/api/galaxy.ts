@@ -1,7 +1,11 @@
 import { apiGet, apiPost, apiPut } from './client';
 
 /** 백엔드 Season enum */
-export type Season = 'SPRING' | 'SUMMER' | 'AUTUMN' | 'WINTER';
+export type ApiSeason = 'SPRING' | 'SUMMER' | 'AUTUMN' | 'WINTER';
+/** @deprecated ApiSeason 사용 — observatory 호환 alias */
+export type Season = ApiSeason;
+
+export type KoreanSeason = '봄' | '여름' | '가을' | '겨울';
 
 export interface ConstellationStat {
   category: string;
@@ -17,7 +21,7 @@ export interface CategoryCount {
 
 export interface GalaxyOverviewResponse {
   year: number;
-  season: Season;
+  season: ApiSeason;
   season_label: string;
   north_star_text: string | null;
   total_star_count: number;
@@ -35,7 +39,7 @@ export interface GalaxyOverviewResponse {
 export interface GalaxyReportListItem {
   id: string;
   year: number;
-  season: Season;
+  season: ApiSeason;
   season_label: string;
   generated_through: string;
   total_star_count: number;
@@ -111,7 +115,7 @@ export interface GalaxyReportAiAnalysis {
 export interface GalaxyReportDetailResponse {
   id: string;
   year: number;
-  season: Season;
+  season: ApiSeason;
   season_label: string;
   season_start: string;
   season_end: string;
@@ -128,14 +132,78 @@ export interface GalaxyReportDetailResponse {
   reflection_updated_at: string | null;
 }
 
-/** GET /api/v1/galaxy/overview */
-export function getGalaxyOverview(params?: {
-  year?: number;
-  season?: Season;
-}): Promise<GalaxyOverviewResponse> {
+const KOREAN_TO_API: Record<KoreanSeason, ApiSeason> = {
+  봄: 'SPRING',
+  여름: 'SUMMER',
+  가을: 'AUTUMN',
+  겨울: 'WINTER',
+};
+
+const API_TO_KOREAN: Record<ApiSeason, KoreanSeason> = {
+  SPRING: '봄',
+  SUMMER: '여름',
+  AUTUMN: '가을',
+  WINTER: '겨울',
+};
+
+export function koreanSeasonToApi(season: KoreanSeason): ApiSeason {
+  return KOREAN_TO_API[season];
+}
+
+export function apiSeasonToKorean(season: ApiSeason): KoreanSeason {
+  return API_TO_KOREAN[season];
+}
+
+export function seasonForMonth(month: number): ApiSeason {
+  if (month >= 3 && month <= 5) return 'SPRING';
+  if (month >= 6 && month <= 8) return 'SUMMER';
+  if (month >= 9 && month <= 11) return 'AUTUMN';
+  return 'WINTER';
+}
+
+/** 겨울(12~2월)은 season_year 규칙 적용 */
+export function seasonYearForDate(year: number, month: number): number {
+  if (month === 12) return year;
+  if (month <= 2) return year - 1;
+  return year;
+}
+
+export function getDefaultGalaxyFilter(): {
+  year: number;
+  season: KoreanSeason;
+} {
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const season = apiSeasonToKorean(seasonForMonth(month));
+  const year = seasonYearForDate(now.getFullYear(), month);
+  return { year, season };
+}
+
+/**
+ * GET /api/v1/galaxy/overview
+ * - getGalaxyOverview(year, season) — 은하감상
+ * - getGalaxyOverview({ year?, season? }) / getGalaxyOverview() — 천문연구소
+ */
+export function getGalaxyOverview(
+  yearOrParams?: number | { year?: number; season?: ApiSeason },
+  season?: ApiSeason,
+): Promise<GalaxyOverviewResponse> {
+  if (typeof yearOrParams === 'number') {
+    if (!season) {
+      throw new Error('getGalaxyOverview(year, season) requires season');
+    }
+    const params = new URLSearchParams({
+      year: String(yearOrParams),
+      season,
+    });
+    return apiGet<GalaxyOverviewResponse>(
+      `/api/v1/galaxy/overview?${params.toString()}`,
+    );
+  }
+
   const query = new URLSearchParams();
-  if (params?.year != null) query.set('year', String(params.year));
-  if (params?.season) query.set('season', params.season);
+  if (yearOrParams?.year != null) query.set('year', String(yearOrParams.year));
+  if (yearOrParams?.season) query.set('season', yearOrParams.season);
   const qs = query.toString();
   return apiGet<GalaxyOverviewResponse>(
     `/api/v1/galaxy/overview${qs ? `?${qs}` : ''}`,
@@ -150,7 +218,7 @@ export function listGalaxyReports(): Promise<GalaxyReportListResponse> {
 /** POST /api/v1/galaxy/reports/{year}/{season}/generate */
 export function generateGalaxyReport(
   year: number,
-  season: Season,
+  season: ApiSeason,
 ): Promise<GalaxyReportDetailResponse> {
   return apiPost<GalaxyReportDetailResponse>(
     `/api/v1/galaxy/reports/${year}/${season}/generate`,
