@@ -922,8 +922,9 @@ function LoadingScreen({ message }: { message: string }) {
 
 export default function StarRecordView() {
   const router = useRouter();
-  const { source } = useLocalSearchParams<{ source?: string }>();
-  const fromComet = source === 'comet';
+  const { source } = useLocalSearchParams<{ source?: string | string[] }>();
+  const sourceValue = Array.isArray(source) ? source[0] : source;
+  const fromComet = sourceValue === 'comet';
   const { width, height } = useWindowDimensions();
   const [screen, setScreen] = useState<Screen>('base');
   const [loadingMessage, setLoadingMessage] = useState('빛의 속도로 분석하는 중...');

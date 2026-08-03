@@ -1,5 +1,7 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -35,22 +37,26 @@ import {
   useResponsiveStyles,
   withOpacity,
 } from '@/assets_shared';
+import {
+  acceptCometRecommendation,
+  completeComet,
+  createComet,
+  deleteComet,
+  generateCometRecommendation,
+  listComets,
+  splitIsoDate,
+  toIsoDate,
+  todayIsoDate,
+  updateComet,
+  type CometItem,
+  type CometRecommendationItem,
+} from '@/lib/api/comets';
+import { getOnboardingStatus } from '@/lib/api/onboarding';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type Screen = 'main' | 'choice' | 'manual' | 'ai' | 'complete';
 type Tab = 'observing' | 'completed';
-
-interface Comet {
-  id: string;
-  name: string;
-  activity: string;
-  cluster: string;
-  year: string;
-  month: string;
-  day: string;
-  completed: boolean;
-}
 
 interface FormState {
   name: string;
@@ -69,17 +75,6 @@ interface DateError {
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-
-const CLUSTERS = ['관계', '성장', '건강', '창의성', '자기돌봄'] as const;
-
-const AI_PREFILL: FormState = {
-  name: '미뤄온 전화 한 통',
-  activity: '아빠에게 안부 전화하기',
-  cluster: '관계',
-  year: '2026',
-  month: '8',
-  day: '10',
-};
 
 const EMPTY_FORM: FormState = {
   name: '',
@@ -109,10 +104,20 @@ const GOLD = '#e8c547';
 const GOLD_SOFT = '#ffe566';
 const GOLD_TITLE = '#ffe8a3';
 
+function showApiError() {
+  Alert.alert('알림', '요청 처리에 실패했습니다. 다시 시도해 주세요.');
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatDate(year: string, month: string, day: string) {
+  if (!year || !month || !day) return '';
   return `${year}년 ${month}월 ${day}일 까지`;
+}
+
+function formatCometTargetDate(item: CometItem) {
+  const { year, month, day } = splitIsoDate(item.target_completion_date);
+  return formatDate(year, month, day);
 }
 
 function validateDate(year: string, month: string, day: string): DateError {
@@ -150,16 +155,30 @@ function validateDate(year: string, month: string, day: string): DateError {
   return errors;
 }
 
-function isCometFailed(comet: Comet): boolean {
-  const y = parseInt(comet.year, 10);
-  const m = parseInt(comet.month, 10);
-  const d = parseInt(comet.day, 10);
+function isCometFailed(item: CometItem): boolean {
+  if (!item.target_completion_date) return false;
+  const { year, month, day } = splitIsoDate(item.target_completion_date);
+  const y = parseInt(year, 10);
+  const m = parseInt(month, 10);
+  const d = parseInt(day, 10);
   if (!y || !m || !d) return false;
   const target = new Date(y, m - 1, d);
   target.setHours(0, 0, 0, 0);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return target < today;
+}
+
+function recommendationToForm(rec: CometRecommendationItem): FormState {
+  const { year, month, day } = splitIsoDate(rec.expires_at);
+  return {
+    name: rec.title,
+    activity: rec.description,
+    cluster: rec.target_category,
+    year,
+    month,
+    day,
+  };
 }
 
 // ─── Style definitions ───────────────────────────────────────────────────────
@@ -553,6 +572,29 @@ const STYLE_DEF = {
     borderRadius: 999,
     backgroundColor: '#FFFFFF',
   },
+  loadingOverlay: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(6, 16, 31, 0.55)',
+    zIndex: 50,
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: withOpacity(Palette.cream, 0.85),
+  },
+  cardDelete: {
+    marginTop: 8,
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  cardDeleteLabel: {
+    fontSize: 12,
+    color: withOpacity(Palette.cream, 0.4),
+  },
+  cardActionDisabled: {
+    opacity: 0.55,
+  },
 } as const;
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
@@ -754,16 +796,22 @@ function InputModal({
 function CometCard({
   comet,
   showObserving,
+  busy,
   onComplete,
   onAddToGalaxy,
+  onDelete,
 }: {
-  comet: Comet;
+  comet: CometItem;
   showObserving: boolean;
+  busy?: boolean;
   onComplete?: (id: string) => void;
   onAddToGalaxy?: (id: string) => void;
+  onDelete?: (id: string) => void;
 }) {
   const styles = useResponsiveStyles(STYLE_DEF);
   const failed = showObserving && isCometFailed(comet);
+  const starCreated = comet.record_status === 'STAR_CREATED';
+  const dateLabel = formatCometTargetDate(comet);
 
   return (
     <View style={styles.card}>
@@ -771,47 +819,75 @@ function CometCard({
         <View style={styles.cardNameRow}>
           <AppText style={styles.cardStar}>✦</AppText>
           <AppText variant="emphasis" style={styles.cardName} numberOfLines={1}>
-            {comet.name}
+            {comet.title}
           </AppText>
         </View>
-        {comet.cluster ? (
+        {comet.target_category ? (
           <View style={styles.clusterBadge}>
-            <AppText style={styles.clusterBadgeText}>{comet.cluster}</AppText>
+            <AppText style={styles.clusterBadgeText}>
+              {comet.target_category}
+            </AppText>
           </View>
         ) : null}
       </View>
-      <AppText style={styles.cardActivity}>{comet.activity}</AppText>
-      <AppText style={styles.cardDate}>
-        {formatDate(comet.year, comet.month, comet.day)}
+      <AppText style={styles.cardActivity}>
+        {comet.description ?? comet.activity_summary ?? ''}
       </AppText>
+      {dateLabel ? <AppText style={styles.cardDate}>{dateLabel}</AppText> : null}
       {showObserving ? (
         <TouchableOpacity
-          activeOpacity={failed ? 1 : 0.85}
-          disabled={failed}
-          style={[styles.cardAction, failed && styles.cardActionFailed]}
+          activeOpacity={failed || busy ? 1 : 0.85}
+          disabled={failed || busy}
+          style={[
+            styles.cardAction,
+            failed && styles.cardActionFailed,
+            busy && styles.cardActionDisabled,
+          ]}
           onPress={() => onComplete?.(comet.id)}
         >
-          <AppText
-            variant="emphasis"
-            style={{
-              ...styles.cardActionLabel,
-              ...(failed ? styles.cardActionLabelFailed : null),
-            }}
-          >
-            {failed ? '관측 실패' : '관측 완료'}
-          </AppText>
+          {busy ? (
+            <ActivityIndicator color={Palette.cream} />
+          ) : (
+            <AppText
+              variant="emphasis"
+              style={{
+                ...styles.cardActionLabel,
+                ...(failed ? styles.cardActionLabelFailed : null),
+              }}
+            >
+              {failed ? '관측 실패' : '관측 완료'}
+            </AppText>
+          )}
         </TouchableOpacity>
       ) : (
         <TouchableOpacity
-          activeOpacity={0.85}
-          style={styles.cardAction}
+          activeOpacity={starCreated || busy ? 1 : 0.85}
+          disabled={starCreated || busy}
+          style={[
+            styles.cardAction,
+            (starCreated || busy) && styles.cardActionDisabled,
+          ]}
           onPress={() => onAddToGalaxy?.(comet.id)}
         >
-          <AppText variant="emphasis" style={styles.cardActionLabel}>
-            은하에 추가하기
-          </AppText>
+          {busy ? (
+            <ActivityIndicator color={Palette.cream} />
+          ) : (
+            <AppText variant="emphasis" style={styles.cardActionLabel}>
+              {starCreated ? '성단에 추가됨' : '성단에 추가하기'}
+            </AppText>
+          )}
         </TouchableOpacity>
       )}
+      {onDelete ? (
+        <TouchableOpacity
+          activeOpacity={0.85}
+          disabled={busy}
+          style={styles.cardDelete}
+          onPress={() => onDelete(comet.id)}
+        >
+          <AppText style={styles.cardDeleteLabel}>삭제</AppText>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
@@ -824,6 +900,8 @@ function CometForm({
   onSubmit,
   onBack,
   isAI,
+  clusters,
+  submitting,
 }: {
   form: FormState;
   setForm: (f: FormState) => void;
@@ -832,6 +910,8 @@ function CometForm({
   onSubmit: () => void;
   onBack: () => void;
   isAI: boolean;
+  clusters: string[];
+  submitting?: boolean;
 }) {
   const styles = useResponsiveStyles(STYLE_DEF);
   const [textModal, setTextModal] = useState<null | {
@@ -957,7 +1037,7 @@ function CometForm({
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.clusterRow}
           >
-            {CLUSTERS.map((c) => {
+            {clusters.map((c) => {
               const selected = form.cluster === c;
               return (
                 <TagButton
@@ -1025,7 +1105,12 @@ function CometForm({
         colors={['rgba(8,14,42,0)', 'rgba(8,14,42,1)']}
         style={styles.formBottomCta}
       >
-        <PrimaryButton label="혜성 등록" size="large" onPress={handleSubmit} />
+        <PrimaryButton
+          label={submitting ? '등록 중...' : '혜성 등록'}
+          size="large"
+          disabled={submitting}
+          onPress={handleSubmit}
+        />
       </LinearGradient>
 
       <InputModal
@@ -1069,74 +1154,226 @@ export default function CometView() {
 
   const [screen, setScreen] = useState<Screen>('main');
   const [tab, setTab] = useState<Tab>('observing');
-  const [observingComets, setObservingComets] = useState<Comet[]>([]);
-  const [completedComets, setCompletedComets] = useState<Comet[]>([]);
-  const [lastComet, setLastComet] = useState<Comet | null>(null);
+  const [observingComets, setObservingComets] = useState<CometItem[]>([]);
+  const [completedComets, setCompletedComets] = useState<CometItem[]>([]);
+  const [lastComet, setLastComet] = useState<CometItem | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [dateErrors, setDateErrors] = useState<DateError>({});
-  const nextId = useRef(1);
+  const [clusters, setClusters] = useState<string[]>([]);
+  const [recommendationId, setRecommendationId] = useState<string | null>(null);
+
+  const [listLoading, setListLoading] = useState(false);
+  const [generatingAI, setGeneratingAI] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [actionId, setActionId] = useState<string | null>(null);
 
   const navInset = bottomNavigationInset(
     scale(BottomNavigationBarDimensions.height),
   );
   const showNav = screen === 'main';
 
+  const loadClusters = useCallback(async () => {
+    try {
+      const status = await getOnboardingStatus();
+      const selected = status.north_star?.selected_categories ?? [];
+      if (selected.length > 0) setClusters(selected);
+    } catch (error) {
+      console.error('Comet clusters load error:', error);
+    }
+  }, []);
+
+  const loadLists = useCallback(async () => {
+    setListLoading(true);
+    try {
+      const [pending, completed] = await Promise.all([
+        listComets('PENDING'),
+        listComets('COMPLETED'),
+      ]);
+      setObservingComets(pending.items);
+      setCompletedComets(completed.items);
+    } catch (error) {
+      console.error('Comet list load error:', error);
+      showApiError();
+    } finally {
+      setListLoading(false);
+    }
+  }, []);
+
+  const loadTabList = useCallback(async (nextTab: Tab) => {
+    setListLoading(true);
+    try {
+      if (nextTab === 'observing') {
+        const pending = await listComets('PENDING');
+        setObservingComets(pending.items);
+      } else {
+        const completed = await listComets('COMPLETED');
+        setCompletedComets(completed.items);
+      }
+    } catch (error) {
+      console.error('Comet tab list load error:', error);
+      showApiError();
+    } finally {
+      setListLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadClusters();
+    void loadLists();
+  }, [loadClusters, loadLists, refreshKey]);
+
   const handleRefresh = useCallback(() => {
     setRefreshKey((key) => key + 1);
   }, []);
 
-  const handleRegister = () => {
-    const errs = validateDate(form.year, form.month, form.day);
-    if (errs.date || errs.year || errs.month || errs.day) {
-      setDateErrors(errs);
-      return;
-    }
-    const comet: Comet = {
-      id: String(nextId.current++),
-      name: form.name.trim() || '새로운 혜성',
-      activity: form.activity.trim(),
-      cluster: form.cluster,
-      year: form.year.trim(),
-      month: form.month.trim(),
-      day: form.day.trim(),
-      completed: false,
-    };
-    setLastComet(comet);
-    setObservingComets((prev) => [...prev, comet]);
-    setScreen('complete');
+  const handleTabChange = (next: Tab) => {
+    setTab(next);
+    void loadTabList(next);
   };
 
-  const handleCompleteComet = (id: string) => {
+  const handleRegisterManual = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const created = await createComet({
+        title: form.name.trim(),
+        target_category: form.cluster,
+        description: form.activity.trim() || null,
+        target_completion_date: toIsoDate(form.year, form.month, form.day),
+      });
+      setLastComet(created);
+      setScreen('complete');
+      void loadLists();
+    } catch (error) {
+      console.error('Comet create error:', error);
+      showApiError();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRegisterAI = async () => {
+    if (submitting || !recommendationId) return;
+    setSubmitting(true);
+    try {
+      let item = await acceptCometRecommendation(recommendationId);
+
+      const desiredDate = toIsoDate(form.year, form.month, form.day);
+      const needsUpdate =
+        item.title !== form.name.trim() ||
+        (item.description ?? '') !== form.activity.trim() ||
+        item.target_category !== form.cluster ||
+        (item.target_completion_date ?? '') !== desiredDate;
+
+      if (needsUpdate) {
+        item = await updateComet(item.id, {
+          title: form.name.trim(),
+          description: form.activity.trim() || null,
+          target_category: form.cluster,
+          target_completion_date: desiredDate,
+        });
+      }
+
+      setLastComet(item);
+      setRecommendationId(null);
+      setScreen('complete');
+      void loadLists();
+    } catch (error) {
+      console.error('Comet accept error:', error);
+      showApiError();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCompleteComet = async (id: string) => {
+    if (actionId) return;
     const comet = observingComets.find((c) => c.id === id);
     if (!comet) return;
-    setObservingComets((prev) => prev.filter((c) => c.id !== id));
-    setCompletedComets((prev) => [...prev, { ...comet, completed: true }]);
-    setTab('completed');
+    setActionId(id);
+    try {
+      await completeComet(id, {
+        activity_summary:
+          (comet.description ?? '').trim() ||
+          comet.title ||
+          '혜성 관측을 완료했습니다.',
+        completed_on: todayIsoDate(),
+      });
+      setObservingComets((prev) => prev.filter((c) => c.id !== id));
+      setTab('completed');
+      const completed = await listComets('COMPLETED');
+      setCompletedComets(completed.items);
+    } catch (error) {
+      console.error('Comet complete error:', error);
+      showApiError();
+    } finally {
+      setActionId(null);
+    }
   };
 
-  const handleAddToGalaxy = (_id: string) => {
+  const handleAddToGalaxy = (id: string) => {
     router.push({
       pathname: '/star-record',
-      params: { source: 'comet' },
+      params: { source: 'comet', cometId: id },
     });
+  };
+
+  const handleDeleteComet = (id: string) => {
+    Alert.alert('혜성 삭제', '이 혜성을 삭제할까요?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            if (actionId) return;
+            setActionId(id);
+            try {
+              await deleteComet(id);
+              setObservingComets((prev) => prev.filter((c) => c.id !== id));
+              setCompletedComets((prev) => prev.filter((c) => c.id !== id));
+            } catch (error) {
+              console.error('Comet delete error:', error);
+              showApiError();
+            } finally {
+              setActionId(null);
+            }
+          })();
+        },
+      },
+    ]);
   };
 
   const goToRegisterChoice = () => {
     setForm(EMPTY_FORM);
     setDateErrors({});
+    setRecommendationId(null);
     setScreen('choice');
   };
 
   const goToManual = () => {
     setForm(EMPTY_FORM);
     setDateErrors({});
+    setRecommendationId(null);
     setScreen('manual');
   };
 
-  const goToAI = () => {
-    setForm(AI_PREFILL);
-    setDateErrors({});
-    setScreen('ai');
+  const goToAI = async () => {
+    if (generatingAI) return;
+    setGeneratingAI(true);
+    try {
+      const result = await generateCometRecommendation();
+      const rec = result.recommendation;
+      setRecommendationId(rec.id);
+      setForm(recommendationToForm(rec));
+      setDateErrors({});
+      setScreen('ai');
+    } catch (error) {
+      console.error('Comet recommendation generate error:', error);
+      showApiError();
+    } finally {
+      setGeneratingAI(false);
+    }
   };
 
   const renderChoice = () => (
@@ -1156,16 +1393,22 @@ export default function CometView() {
         <View style={styles.choiceButtons}>
           <TouchableOpacity
             activeOpacity={0.85}
-            style={styles.choiceBtn}
-            onPress={goToAI}
+            style={[styles.choiceBtn, generatingAI && styles.cardActionDisabled]}
+            disabled={generatingAI}
+            onPress={() => void goToAI()}
           >
-            <AppText variant="emphasis" style={styles.choiceBtnLabel}>
-              AI 혜성 추천
-            </AppText>
+            {generatingAI ? (
+              <ActivityIndicator color={Palette.cream} />
+            ) : (
+              <AppText variant="emphasis" style={styles.choiceBtnLabel}>
+                AI 혜성 추천
+              </AppText>
+            )}
           </TouchableOpacity>
           <TouchableOpacity
             activeOpacity={0.85}
             style={styles.choiceBtn}
+            disabled={generatingAI}
             onPress={goToManual}
           >
             <AppText variant="emphasis" style={styles.choiceBtnLabel}>
@@ -1174,6 +1417,15 @@ export default function CometView() {
           </TouchableOpacity>
         </View>
       </View>
+      {generatingAI ? (
+        <View
+          style={[StyleSheet.absoluteFill, styles.loadingOverlay]}
+          pointerEvents="none"
+        >
+          <ActivityIndicator size="large" color={Palette.cream} />
+          <AppText style={styles.loadingText}>AI 분석 중...</AppText>
+        </View>
+      ) : null}
     </View>
   );
 
@@ -1183,11 +1435,19 @@ export default function CometView() {
       setForm={setForm}
       dateErrors={dateErrors}
       setDateErrors={setDateErrors}
-      onSubmit={handleRegister}
+      onSubmit={() => {
+        void (isAI ? handleRegisterAI() : handleRegisterManual());
+      }}
       onBack={() => setScreen('choice')}
       isAI={isAI}
+      clusters={clusters}
+      submitting={submitting}
     />
   );
+
+  const lastDate = lastComet
+    ? formatCometTargetDate(lastComet)
+    : '';
 
   const renderComplete = () => (
     <View style={styles.flex}>
@@ -1204,19 +1464,19 @@ export default function CometView() {
         {lastComet ? (
           <View style={styles.summaryCard}>
             <AppText variant="emphasis" style={styles.summaryName}>
-              {lastComet.name}
+              {lastComet.title}
             </AppText>
             <AppText style={styles.summaryActivity}>
-              {lastComet.activity}
+              {lastComet.description ?? ''}
             </AppText>
-            {lastComet.cluster ? (
+            {lastComet.target_category ? (
               <AppText variant="emphasis" style={styles.summaryCluster}>
-                {lastComet.cluster}
+                {lastComet.target_category}
               </AppText>
             ) : null}
-            <AppText style={styles.summaryDate}>
-              {formatDate(lastComet.year, lastComet.month, lastComet.day)}
-            </AppText>
+            {lastDate ? (
+              <AppText style={styles.summaryDate}>{lastDate}</AppText>
+            ) : null}
           </View>
         ) : null}
       </View>
@@ -1227,6 +1487,7 @@ export default function CometView() {
           onPress={() => {
             setTab('observing');
             setScreen('main');
+            void loadTabList('observing');
           }}
         />
       </View>
@@ -1237,6 +1498,7 @@ export default function CometView() {
     const hasObserving = observingComets.length > 0;
     const hasCompleted = completedComets.length > 0;
     const showEmpty = tab === 'observing' ? !hasObserving : !hasCompleted;
+    const list = tab === 'observing' ? observingComets : completedComets;
 
     return (
       <View style={styles.flex}>
@@ -1246,9 +1508,13 @@ export default function CometView() {
           </AppText>
         </View>
 
-        <SegmentedControl tab={tab} onChange={setTab} />
+        <SegmentedControl tab={tab} onChange={handleTabChange} />
 
-        {showEmpty ? (
+        {listLoading && showEmpty ? (
+          <View style={styles.emptyCenter}>
+            <ActivityIndicator color={Palette.cream} />
+          </View>
+        ) : showEmpty ? (
           <View style={styles.emptyCenter}>
             <AppText style={styles.emptyText}>
               {tab === 'observing'
@@ -1265,17 +1531,17 @@ export default function CometView() {
             ]}
             showsVerticalScrollIndicator={false}
           >
-            {(tab === 'observing' ? observingComets : completedComets).map(
-              (c) => (
-                <CometCard
-                  key={c.id}
-                  comet={c}
-                  showObserving={tab === 'observing'}
-                  onComplete={handleCompleteComet}
-                  onAddToGalaxy={handleAddToGalaxy}
-                />
-              ),
-            )}
+            {list.map((c) => (
+              <CometCard
+                key={c.id}
+                comet={c}
+                showObserving={tab === 'observing'}
+                busy={actionId === c.id}
+                onComplete={(id) => void handleCompleteComet(id)}
+                onAddToGalaxy={handleAddToGalaxy}
+                onDelete={handleDeleteComet}
+              />
+            ))}
           </ScrollView>
         )}
 
