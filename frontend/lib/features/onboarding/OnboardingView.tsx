@@ -19,6 +19,7 @@ import {
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 
 import {
   AppText,
@@ -156,6 +157,10 @@ const STYLE_DEF = {
     alignItems: 'center',
     gap: 20,
   },
+  logoWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   splashCopy: {
     gap: 24,
     alignItems: 'center',
@@ -163,12 +168,13 @@ const STYLE_DEF = {
   splashParagraph: {
     textAlign: 'center',
     lineHeight: 28,
+    fontFamily: FontFamily.light,
   },
   splashTapHint: {
-    fontSize: 20,
-    letterSpacing: 2.4,
-    fontFamily: FontFamily.regular,
-    color: withOpacity('#F8EEC1', 0.55),
+    fontSize: 14,
+    letterSpacing: 1.6,
+    fontFamily: FontFamily.light,
+    color: Palette.cream,
     textAlign: 'center',
   },
   splashFooter: {
@@ -191,7 +197,7 @@ const STYLE_DEF = {
     fontSize: 14,
     lineHeight: 24,
     textAlign: 'center',
-    color: withOpacity(Palette.cream, 0.55),
+    color: Palette.cream,
   },
   onboardingBody: {
     flex: 1,
@@ -251,7 +257,7 @@ const STYLE_DEF = {
     marginTop: 8,
   },
   textAreaReadonly: {
-    color: withOpacity(Palette.cream, 0.6),
+    color: Palette.cream,
   },
   categoryScrollContent: {
     flexGrow: 1,
@@ -317,11 +323,11 @@ const STYLE_DEF = {
   },
   selectCountLabel: {
     fontSize: 12,
-    color: withOpacity(Palette.cream, 0.35),
+    color: Palette.cream,
   },
   selectCountValue: {
     fontSize: 12,
-    color: withOpacity(Palette.cream, 0.35),
+    color: Palette.cream,
   },
   selectCountReady: {
     color: Palette.cream,
@@ -333,7 +339,7 @@ const STYLE_DEF = {
   },
   linkBtnText: {
     fontSize: 12,
-    color: withOpacity(Palette.cream, 0.35),
+    color: Palette.cream,
     textDecorationLine: 'underline',
   },
   errorBox: {
@@ -479,10 +485,38 @@ function DismissKeyboardView({ children }: { children: React.ReactNode }) {
   );
 }
 
+function LogoHaloGlow({ width, height }: { width: number; height: number }) {
+  return (
+    <Svg
+      width={width}
+      height={height}
+      style={{ position: 'absolute' }}
+      pointerEvents="none"
+    >
+      <Defs>
+        <RadialGradient id="polarisLogoGlow" cx="50%" cy="50%" rx="50%" ry="50%">
+          <Stop offset="0%" stopColor={Palette.cream} stopOpacity={0.42} />
+          <Stop offset="35%" stopColor={Palette.cream} stopOpacity={0.18} />
+          <Stop offset="70%" stopColor={Palette.cream} stopOpacity={0.06} />
+          <Stop offset="100%" stopColor={Palette.cream} stopOpacity={0} />
+        </RadialGradient>
+      </Defs>
+      <Ellipse
+        cx={width / 2}
+        cy={height / 2}
+        rx={width / 2}
+        ry={height / 2}
+        fill="url(#polarisLogoGlow)"
+      />
+    </Svg>
+  );
+}
+
 function SplashScreen({ onNext }: { onNext: () => void }) {
   const styles = useStyles();
   const { scale, width } = useResponsive();
   const logoWidth = Math.min(width - scale(64), scale(241));
+  const logoHeight = (logoWidth * 83) / 241;
   const tapOpacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -511,7 +545,13 @@ function SplashScreen({ onNext }: { onNext: () => void }) {
       <View style={styles.splashCenter}>
         <View style={styles.splashBrand}>
           <PolarisIcon size={97} />
-          <LogoIcon width={logoWidth} />
+          <View style={styles.logoWrap}>
+            <LogoHaloGlow
+              width={logoWidth * 1.45}
+              height={logoHeight * 2.4}
+            />
+            <LogoIcon width={logoWidth} />
+          </View>
         </View>
         <View style={styles.splashCopy}>
           <AppText style={styles.splashParagraph}>

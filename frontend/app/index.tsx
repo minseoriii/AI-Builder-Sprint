@@ -27,6 +27,7 @@ import {
   ResponsiveScreen,
   ScreenContainer,
   ScreenLayout,
+  ValueQuote,
   createResponsiveStylesContext,
   useAutoRefreshOnFocus,
   useResponsive,
@@ -159,9 +160,9 @@ function PolarisModal({
             />
           </View>
           <AppText style={styles.modalEyebrow}>나의 북극성 · 가치관</AppText>
-          <AppText variant="emphasis" style={styles.modalBody}>
+          <ValueQuote style={styles.modalQuote} textStyle={styles.modalBody}>
             {northStarText || '아직 북극성이 설정되지 않았어요.'}
-          </AppText>
+          </ValueQuote>
           <TouchableOpacity
             onPress={onClose}
             activeOpacity={0.7}
@@ -323,8 +324,8 @@ function HomeScreen() {
                     <Image
                       source={ImageAssets.ic_polaris}
                       style={{
-                        width: r.scale(72),
-                        height: r.scale(72),
+                        width: r.scale(86),
+                        height: r.scale(86),
                       }}
                       resizeMode="contain"
                     />
@@ -332,21 +333,13 @@ function HomeScreen() {
                   </TouchableOpacity>
                 </View>
 
-                <View style={styles.valueRow}>
-                  <Image
-                    source={ImageAssets.ic_roundstar1}
-                    style={styles.valueStar}
-                    resizeMode="contain"
-                  />
-                  <AppText style={styles.valueText} numberOfLines={2}>
-                    {northStarText || '나의 중심 목표를 설정해 보세요.'}
-                  </AppText>
-                  <Image
-                    source={ImageAssets.ic_roundstar1}
-                    style={styles.valueStar}
-                    resizeMode="contain"
-                  />
-                </View>
+                <ValueQuote
+                  style={styles.valueRow}
+                  textStyle={styles.valueText}
+                  numberOfLines={2}
+                >
+                  {northStarText || '나의 중심 목표를 설정해 보세요.'}
+                </ValueQuote>
 
                 <View style={styles.createWrap}>
                   <Pressable
@@ -404,7 +397,7 @@ const HOME_STYLE_DEF = {
     paddingBottom: 8,
   },
   title: {
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.medium,
     fontSize: 26,
     color: Colors.text.emphasis,
     letterSpacing: -0.78,
@@ -412,9 +405,9 @@ const HOME_STYLE_DEF = {
   },
   subtitle: {
     marginTop: 6,
-    fontFamily: FontFamily.regular,
+    fontFamily: FontFamily.light,
     fontSize: 13,
-    color: withOpacity(Palette.cream, 0.55),
+    color: Palette.cream,
     letterSpacing: -0.13,
   },
   main: {
@@ -440,7 +433,7 @@ const HOME_STYLE_DEF = {
     alignItems: 'center',
   },
   clusterLabelSelected: {
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.medium,
   },
   polarisBtn: {
     zIndex: 5,
@@ -449,30 +442,20 @@ const HOME_STYLE_DEF = {
     padding: 12,
   },
   polarisLabel: {
-    fontFamily: FontFamily.regular,
+    fontFamily: FontFamily.bold,
     fontSize: 12,
-    color: withOpacity(Palette.cream, 0.7),
+    color: Palette.cream,
     letterSpacing: 0.48,
   },
   valueRow: {
     marginTop: 12,
     paddingHorizontal: ScreenLayout.horizontal,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
     maxWidth: '100%',
-  },
-  valueStar: {
-    width: 14,
-    height: 14,
+    alignSelf: 'center',
   },
   valueText: {
-    flexShrink: 1,
-    fontFamily: FontFamily.regular,
     fontSize: 14,
-    color: withOpacity(Palette.cream, 0.75),
     letterSpacing: -0.14,
-    textAlign: 'center',
   },
   createWrap: {
     marginTop: 32,
@@ -526,17 +509,17 @@ const HOME_STYLE_DEF = {
   modalEyebrow: {
     fontFamily: FontFamily.regular,
     fontSize: 11,
-    color: withOpacity(Palette.cream, 0.65),
+    color: Palette.cream,
     letterSpacing: 0.88,
     marginBottom: 12,
   },
   modalBody: {
-    fontFamily: FontFamily.bold,
     fontSize: 18,
     color: Colors.text.emphasis,
     lineHeight: 29,
     letterSpacing: -0.36,
-    textAlign: 'center',
+  },
+  modalQuote: {
     marginBottom: 28,
   },
   modalCloseBtn: {
@@ -546,11 +529,17 @@ const HOME_STYLE_DEF = {
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalCloseText: {
     fontFamily: FontFamily.regular,
     color: Colors.text.buttonActive,
     fontSize: 13,
+    lineHeight: 13,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
 } as const;
 

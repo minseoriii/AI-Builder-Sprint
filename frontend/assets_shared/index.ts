@@ -14,6 +14,9 @@ export type { TagButtonProps } from './components/TagButton';
 export { AppText } from './components/AppText';
 export type { AppTextProps, AppTextVariant } from './components/AppText';
 
+export { ValueQuote } from './components/ValueQuote';
+export type { ValueQuoteProps } from './components/ValueQuote';
+
 export { AppConfirmModal } from './components/AppConfirmModal';
 export type { AppConfirmModalProps } from './components/AppConfirmModal';
 

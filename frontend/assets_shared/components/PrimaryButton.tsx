@@ -118,6 +118,7 @@ export function PrimaryButton({
             styles.label,
             {
               fontSize: scaledFontSize,
+              lineHeight: scaledFontSize,
               color: isActive
                 ? Colors.text.buttonActive
                 : Colors.text.disabled,
@@ -141,6 +142,8 @@ const styles = StyleSheet.create({
   label: {
     fontFamily: FontFamily.regular,
     textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   pressed: {
     opacity: 0.85,

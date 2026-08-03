@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   label: {
-    fontFamily: FontFamily.regular,
+    fontFamily: FontFamily.medium,
     textAlign: 'center',
   },
 });

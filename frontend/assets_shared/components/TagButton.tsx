@@ -63,7 +63,7 @@ export function TagButton({
           styles.label,
           {
             fontSize: tagFontSize,
-            lineHeight: tagFontSize + scale(6),
+            lineHeight: tagFontSize,
           },
           isActive && styles.labelActive,
           textStyle,
@@ -86,6 +86,8 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     color: Colors.text.tag,
     textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
     flexShrink: 0,
   },
   labelActive: {

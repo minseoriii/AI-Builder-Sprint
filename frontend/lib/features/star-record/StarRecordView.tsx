@@ -19,7 +19,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, Path, Stop, LinearGradient as SvgLinearGradient } from 'react-native-svg';
 
 import {
@@ -28,10 +28,12 @@ import {
   ClusterIcon,
   Colors,
   FontFamily,
+  Palette,
   PrimaryButton,
   ScreenContainer,
   ScreenLayout,
   scaleDesign,
+  withOpacity,
 } from '@/assets_shared';
 import type { ClusterIndex } from '@/assets_shared';
 import {
@@ -138,12 +140,16 @@ const TAG_ICON_SOURCES: Record<keyof Tags, number> = {
   emotion: require('@/assets_shared/images/Love.png'),
 };
 
-const PEN_ICON = require('@/assets_shared/images/Group 90.png');
+const PEN_ICON = require('@/assets_shared/stars_png/ic_pen.png');
 const COMPLETE_STAR_IMAGE = require('@/assets_shared/images/ic_shapestar4.png');
 
 /** STATE1/2 타이틀·서브카피 폭 계산용 — DesignFrame(412) 기준 좌우 대칭 여백 */
 const TITLE_MAX_WIDTH = 412 - ScreenLayout.titleX * 2;
 const SUBTITLE_MAX_WIDTH = 412 - ScreenLayout.subtitleX * 2;
+/** 별 생성 플로우 본문(타이틀~입력) 아래로 내리는 보정 — DesignFrame px */
+const STAR_CREATE_CONTENT_OFFSET_Y = 30;
+/** 보완 입력 화면은 헤더·줄간격 때문에 더 내려가 보여 오프셋을 줄임 */
+const SUPPLEMENT_CONTENT_OFFSET_Y = 8;
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -258,19 +264,6 @@ function WarningIcon() {
   );
 }
 
-function CloseIcon() {
-  return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M18 6L6 18M6 6l12 12"
-        stroke="rgba(255,255,255,0.4)"
-        strokeWidth={2}
-        strokeLinecap="round"
-      />
-    </Svg>
-  );
-}
-
 function EditIcon({ active }: { active: boolean }) {
   const color = active ? COLORS.purpleSoft : 'rgba(255,255,255,0.25)';
   return (
@@ -374,8 +367,10 @@ function PurpleStarIcon({ size = 48 }: { size?: number }) {
 // ─── Shared chrome ─────────────────────────────────────────────────────────
 
 function StarCreateHeader({ onBack }: { onBack: () => void }) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={styles.chromeHeaderWrap}>
+    <View style={[styles.chromeHeaderWrap, { paddingTop: insets.top + 12 }]}>
       <View style={styles.chromeHeaderRow}>
         <TouchableOpacity
           onPress={onBack}
@@ -476,7 +471,7 @@ function BaseScreen({
         style={{
           ...styles.baseTitle,
           left: x(ScreenLayout.titleX),
-          top: y(ScreenLayout.titleY),
+          top: y(ScreenLayout.titleY + STAR_CREATE_CONTENT_OFFSET_Y),
           width: x(TITLE_MAX_WIDTH),
         }}
       >
@@ -487,7 +482,7 @@ function BaseScreen({
         style={{
           ...styles.baseSubtitle,
           left: x(ScreenLayout.subtitleX),
-          top: y(ScreenLayout.subtitleY),
+          top: y(ScreenLayout.subtitleY + STAR_CREATE_CONTENT_OFFSET_Y),
           width: x(SUBTITLE_MAX_WIDTH),
         }}
       >
@@ -498,14 +493,14 @@ function BaseScreen({
         value={text}
         onChangeText={handleChange}
         placeholder="오늘 하루를 기록해보세요..."
-        placeholderTextColor="rgba(248,238,193,0.6)"
+        placeholderTextColor={withOpacity(Palette.cream, 0.6)}
         multiline
         textAlignVertical="top"
         style={[
           styles.textArea,
           {
             left: x(ScreenLayout.textAreaX),
-            top: y(ScreenLayout.textAreaY),
+            top: y(ScreenLayout.textAreaY + STAR_CREATE_CONTENT_OFFSET_Y),
             width: x(ScreenLayout.textAreaWidth),
             height: y(ScreenLayout.textAreaHeight),
             textAlignVertical: 'top',
@@ -519,7 +514,10 @@ function BaseScreen({
             styles.errorRow,
             {
               left: x(ScreenLayout.textAreaX),
-              top: y(ScreenLayout.textAreaY) + y(ScreenLayout.textAreaHeight) + 10,
+              top:
+                y(ScreenLayout.textAreaY + STAR_CREATE_CONTENT_OFFSET_Y) +
+                y(ScreenLayout.textAreaHeight) +
+                10,
               width: x(ScreenLayout.textAreaWidth),
             },
           ]}
@@ -557,13 +555,15 @@ function SupplementScreen({
   const [questionsBottom, setQuestionsBottom] = useState(0);
 
   const blockGap = y(SUPPLEMENT_BLOCK_GAP);
-  const titleTop = y(ScreenLayout.titleY);
+  const titleTop = y(ScreenLayout.titleY + SUPPLEMENT_CONTENT_OFFSET_Y);
   const questionsTop =
-    titleBottom > 0 ? titleBottom + y(12) : y(ScreenLayout.subtitleY);
+    titleBottom > 0
+      ? titleBottom + y(8)
+      : y(ScreenLayout.subtitleY + SUPPLEMENT_CONTENT_OFFSET_Y);
   const textAreaTop =
     questionsBottom > 0
       ? questionsBottom + blockGap
-      : y(ScreenLayout.textAreaY);
+      : y(ScreenLayout.textAreaY + SUPPLEMENT_CONTENT_OFFSET_Y);
   /** 버튼(y:820)과 겹치지 않도록 텍스트창 하단 여유 */
   const maxTextAreaTop = y(ScreenLayout.largeButtonTop) - y(ScreenLayout.textAreaHeight) - y(24);
   const clampedTextAreaTop = Math.min(textAreaTop, maxTextAreaTop);
@@ -580,6 +580,7 @@ function SupplementScreen({
         }}
         style={{
           ...styles.baseTitle,
+          ...styles.supplementTitle,
           left: x(ScreenLayout.titleX),
           top: titleTop,
           width: x(TITLE_MAX_WIDTH),
@@ -613,7 +614,7 @@ function SupplementScreen({
         value={text}
         onChangeText={setText}
         placeholder="자유롭게 작성해보세요..."
-        placeholderTextColor="rgba(248,238,193,0.6)"
+        placeholderTextColor={withOpacity(Palette.cream, 0.6)}
         multiline
         textAlignVertical="top"
         editable={!submitting}
@@ -661,42 +662,56 @@ function TagEditModal({
   }, [visible, currentValue]);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <Pressable style={styles.modalOverlay} onPress={onClose}>
-          <Pressable style={styles.modalCard} onPress={() => undefined}>
-            <View style={styles.modalCardInner}>
-              <View style={styles.modalHeader}>
-                <AppText style={styles.modalTitle}>{tagLabel}를 수정해주세요.</AppText>
-                <TouchableOpacity onPress={onClose} hitSlop={8} activeOpacity={0.7}>
-                  <CloseIcon />
-                </TouchableOpacity>
-              </View>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{tagLabel}를 수정해주세요.</Text>
+              <Pressable
+                onPress={onClose}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="닫기"
+                style={styles.modalCloseBtn}
+              >
+                <Text style={styles.modalClose}>×</Text>
+              </Pressable>
+            </View>
 
+            <View style={styles.modalInputWrap}>
               <TextInput
                 value={value}
                 onChangeText={setValue}
                 autoFocus
+                multiline
                 textAlignVertical="top"
                 style={styles.modalInput}
-                placeholderTextColor="rgba(248,238,193,0.6)"
-              />
-
-              <PrimaryButton
-                label="수정 완료"
-                pinnedToLargeTop={false}
-                style={styles.modalPrimaryButton}
-                onPress={() => {
-                  onSave(value.trim() || currentValue);
-                  onClose();
-                }}
+                placeholderTextColor={withOpacity('#0A1833', 0.45)}
               />
             </View>
-          </Pressable>
-        </Pressable>
+
+            <Pressable
+              style={styles.modalSaveBtn}
+              onPress={() => {
+                onSave(value.trim() || currentValue);
+                onClose();
+              }}
+              accessibilityRole="button"
+            >
+              <Text style={styles.modalSaveLabel}>수정 완료</Text>
+            </Pressable>
+          </View>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -1152,13 +1167,13 @@ const styles = StyleSheet.create({
   loadingText: {
     fontFamily: FontFamily.regular,
     fontSize: 14,
-    color: 'rgba(255,249,221,0.85)',
+    color: Palette.cream,
     textAlign: 'center',
   },
 
-  // ─ Shared header (STATE 1 / STATE 2) ─
+  // ─ Shared header (STATE 1 / STATE 2 / STATE 3) ─
   chromeHeaderWrap: {
-    paddingTop: 8,
+    paddingTop: 0,
   },
   chromeHeaderRow: {
     height: 44,
@@ -1178,7 +1193,7 @@ const styles = StyleSheet.create({
   chromeHeaderTitle: {
     fontFamily: FontFamily.regular,
     fontSize: 14,
-    color: 'rgba(248,238,193,0.6)',
+    color: Palette.cream,
     textAlign: 'center',
   },
   chromeHeaderDivider: {
@@ -1202,7 +1217,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     fontSize: 14,
     lineHeight: 20,
-    color: 'rgba(255,249,221,0.8)',
+    color: Palette.cream,
     textAlign: 'center',
   },
   errorRow: {
@@ -1225,17 +1240,20 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    color: '#FFF9DD',
+    color: Palette.cream,
     fontFamily: FontFamily.regular,
     fontSize: 11,
     textAlign: 'center',
     textAlignVertical: 'top',
-    backgroundColor: 'rgba(248,238,193,0.08)',
+    backgroundColor: withOpacity(Palette.cream, 0.15),
     borderWidth: 1,
-    borderColor: 'rgba(248,238,193,0.3)',
+    borderColor: withOpacity(Palette.cream, 0.6),
   },
 
   // ─ STATE 2: supplement ─
+  supplementTitle: {
+    lineHeight: 28,
+  },
   supplementQuestionList: {
     position: 'absolute',
     gap: 4,
@@ -1244,7 +1262,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     fontSize: 11,
     lineHeight: 16,
-    color: 'rgba(255,249,221,0.85)',
+    color: Palette.cream,
     textAlign: 'center',
   },
 
@@ -1294,6 +1312,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     letterSpacing: 0.4,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   bottomButtonTextDisabled: {
     color: 'rgba(255,255,255,0.35)',
@@ -1301,7 +1322,7 @@ const styles = StyleSheet.create({
   // ─ STATE 3: confirm ─
   confirmScrollPad: {
     paddingHorizontal: 24,
-    paddingTop: 16,
+    paddingTop: 46,
     paddingBottom: 24,
   },
   confirmTitle: {
@@ -1316,31 +1337,31 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     fontSize: 14,
     lineHeight: 20,
-    color: 'rgba(255,249,221,0.8)',
+    color: Palette.cream,
     textAlign: 'center',
     marginBottom: 20,
     alignSelf: 'stretch',
   },
   clusterBlock: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 36,
   },
   clusterName: {
     fontFamily: FontFamily.regular,
-    color: 'rgba(255,249,221,0.85)',
+    color: Palette.cream,
     fontSize: 14,
     marginTop: 8,
     textAlign: 'center',
   },
   clusterHint: {
-    fontFamily: FontFamily.regular,
-    color: 'rgba(248,238,193,0.45)',
+    fontFamily: FontFamily.extraLight,
+    color: Palette.cream,
     fontSize: 12,
     marginTop: 4,
     textAlign: 'center',
   },
   tagList: {
-    gap: 8,
+    gap: 6,
     marginBottom: 20,
     width: '100%',
   },
@@ -1349,7 +1370,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 8,
     backgroundColor: Colors.button.fill,
     borderWidth: 1,
     borderColor: Colors.tag.borderInactive,
@@ -1369,7 +1390,6 @@ const styles = StyleSheet.create({
     color: Colors.text.tag,
     fontSize: 12,
     width: 80,
-    opacity: 0.7,
   },
   tagValue: {
     fontFamily: FontFamily.regular,
@@ -1378,63 +1398,104 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   editBtn: {
-    marginLeft: 8,
-    padding: 4,
+    marginLeft: 30,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: withOpacity(Palette.cream, 0.45),
+    backgroundColor: withOpacity(Palette.cream, 0.12),
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   penIcon: {
-    width: 28,
-    height: 28,
+    width: 16,
+    height: 16,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 22,
   },
   modalCard: {
     width: '100%',
-    borderRadius: 24,
-    overflow: 'hidden',
+    maxWidth: 360,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(248,238,193,0.3)',
-    backgroundColor: '#0f1e3d',
-  },
-  modalCardInner: {
-    paddingHorizontal: ScreenLayout.horizontal,
-    paddingTop: 24,
-    paddingBottom: 24,
-    gap: 20,
+    borderColor: withOpacity(Palette.cream, 0.6),
+    backgroundColor: withOpacity(Palette.cream, 0.3),
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 18,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 12,
   },
   modalTitle: {
-    fontFamily: FontFamily.bold,
-    color: '#F8EEC1',
-    fontSize: 16,
     flex: 1,
-    paddingRight: 12,
+    fontFamily: FontFamily.medium,
+    fontSize: 15,
+    letterSpacing: -0.2,
+    color: Palette.cream,
+    paddingRight: 8,
+  },
+  modalCloseBtn: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalClose: {
+    fontFamily: FontFamily.regular,
+    fontSize: 26,
+    lineHeight: 28,
+    color: Palette.cream,
+    includeFontPadding: false,
+  },
+  modalInputWrap: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: withOpacity(Palette.cream, 0.6),
+    backgroundColor: withOpacity(Palette.cream, 0.6),
+    marginBottom: 16,
+    overflow: 'hidden',
   },
   modalInput: {
-    width: '100%',
-    minHeight: 48,
-    borderRadius: 14,
-    paddingHorizontal: 16,
+    minHeight: 120,
+    maxHeight: 180,
+    paddingHorizontal: 14,
     paddingVertical: 14,
-    color: '#FFF9DD',
-    fontFamily: FontFamily.regular,
+    fontFamily: FontFamily.light,
     fontSize: 14,
-    backgroundColor: Colors.button.fill,
-    borderWidth: 1,
-    borderColor: 'rgba(248,238,193,0.6)',
+    lineHeight: 22,
+    color: '#0A1833',
   },
-  modalPrimaryButton: {
+  modalSaveBtn: {
     alignSelf: 'center',
-    width: '100%',
-    maxWidth: 372,
+    minWidth: 168,
+    height: 44,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: withOpacity(Palette.cream, 0.6),
+    backgroundColor: withOpacity(Palette.cream, 0.15),
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+  },
+  modalSaveLabel: {
+    fontFamily: FontFamily.medium,
+    fontSize: 15,
+    lineHeight: 15,
+    color: Palette.cream,
+    letterSpacing: -0.2,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   completeCenter: {
     flex: 1,
@@ -1452,7 +1513,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     fontSize: 14,
     lineHeight: 20,
-    color: 'rgba(255,249,221,0.8)',
+    color: Palette.cream,
     textAlign: 'center',
     alignSelf: 'stretch',
   },

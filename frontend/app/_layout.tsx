@@ -123,6 +123,7 @@ export default function RootLayout() {
         <Stack.Screen name="star-record" />
         <Stack.Screen name="galaxy-view" options={tabScreenOptions} />
         <Stack.Screen name="observatory" options={tabScreenOptions} />
+        <Stack.Screen name="observatory-report" />
         <Stack.Screen name="comet" options={tabScreenOptions} />
         <Stack.Screen name="mypage" options={tabScreenOptions} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
