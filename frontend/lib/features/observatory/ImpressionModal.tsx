@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: withOpacity(Palette.cream, 0.6),
-    backgroundColor: withOpacity(Palette.cream, 0.6),
+    backgroundColor: withOpacity(Palette.cream, 0.5),
     marginBottom: 16,
     overflow: 'hidden',
   },
@@ -200,6 +200,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     textAlignVertical: 'center',
     includeFontPadding: false,
+    paddingTop: 0,
+    paddingBottom: 0,
   },
   sectionCard: {
     borderRadius: 14,

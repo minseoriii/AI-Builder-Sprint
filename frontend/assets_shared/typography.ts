@@ -26,7 +26,7 @@ export const TextStyles = {
     color: Palette.cream,
   } satisfies TextStyle,
   emphasis: {
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.medium,
     fontSize: 14,
     color: Palette.cream,
   } satisfies TextStyle,

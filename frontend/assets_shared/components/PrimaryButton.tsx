@@ -8,6 +8,7 @@ import {
   ViewStyle,
 } from 'react-native';
 
+import { buttonContentCenter, buttonLabelCenter } from '../buttonStyles';
 import { Colors } from '../colors';
 import { Radii } from '../radii';
 import { ScreenLayout, scaleDesign } from '../spacing';
@@ -114,6 +115,7 @@ export function PrimaryButton({
     >
       {children ?? (
         <Text
+          numberOfLines={1}
           style={[
             styles.label,
             {
@@ -135,15 +137,14 @@ export function PrimaryButton({
 
 const styles = StyleSheet.create({
   base: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    ...buttonContentCenter,
     borderWidth: 1,
+    overflow: 'hidden',
   },
   label: {
     fontFamily: FontFamily.regular,
-    textAlign: 'center',
-    textAlignVertical: 'center',
-    includeFontPadding: false,
+    ...buttonLabelCenter,
+    width: '100%',
   },
   pressed: {
     opacity: 0.85,

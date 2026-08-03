@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Easing,
   Keyboard,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -38,15 +36,17 @@ import {
   onboardingContentTop,
   onboardingBackgroundImage,
   TagButton,
+  ValueQuote,
+  showConnectionError,
   useResponsive,
   withOpacity,
 } from '@/assets_shared';
-import { formatApiErrorAlert } from '@/lib/api/client';
 import {
   analyzeNorthStar,
   saveNorthStar,
   type NorthStarCandidate,
 } from '@/lib/api/onboarding';
+import { logHandledApiError } from '@/lib/api/logHandledApiError';
 
 // ─── Types (API_SPEC_POLARIS_DEVELOP_2026_08_02) ───────────────────────────
 
@@ -54,26 +54,6 @@ type Step = 1 | 2 | 3 | 4;
 
 /** 백엔드 NORTH_STAR_SELECTED_COUNT — 선택 성단은 정확히 5개 */
 const NORTH_STAR_SELECTED_COUNT = 5;
-
-// ─── Alerts (web + native) ─────────────────────────────────────────────────
-
-function showAlert(title: string, message: string) {
-  if (Platform.OS === 'web') {
-    const win =
-      typeof globalThis !== 'undefined'
-        ? (globalThis as { window?: Window; alert?: (msg: string) => void })
-        : undefined;
-    if (win?.window?.alert) {
-      win.window.alert(`${title}\n\n${message}`);
-      return;
-    }
-    if (typeof win?.alert === 'function') {
-      win.alert(`${title}\n\n${message}`);
-      return;
-    }
-  }
-  Alert.alert(title, message);
-}
 
 // ─── Splash star field ─────────────────────────────────────────────────────
 
@@ -190,7 +170,7 @@ const STYLE_DEF = {
     fontSize: 18,
     lineHeight: 28,
     textAlign: 'center',
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.medium,
     color: Palette.cream,
   },
   onboardingSubtitle: {
@@ -272,26 +252,13 @@ const STYLE_DEF = {
     width: '100%',
     paddingHorizontal: 8,
   },
-  sentenceHighlightRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    width: '100%',
-  },
-  sentenceHighlightStarStart: {
-    alignSelf: 'flex-start',
-  },
-  sentenceHighlightStarEnd: {
-    alignSelf: 'flex-end',
-  },
   sentenceHighlightText: {
     flex: 1,
-    flexShrink: 1,
     fontSize: 16,
     lineHeight: 26,
     textAlign: 'center',
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.medium,
     color: Palette.cream,
-    paddingHorizontal: 8,
   },
   tagCountWarning: {
     alignItems: 'center',
@@ -635,22 +602,14 @@ const TAG_COUNT_WARNING = '태그는 5가지를 선택해주세요';
 
 function SentenceHighlight({ sentence }: { sentence: string }) {
   const styles = useStyles();
-  const starSize = 23;
 
   return (
-    <View style={styles.sentenceHighlight}>
-      <View style={styles.sentenceHighlightRow}>
-        <View style={styles.sentenceHighlightStarStart}>
-          <RoundStarIcon variant={2} size={starSize} />
-        </View>
-        <AppText variant="emphasis" style={styles.sentenceHighlightText}>
-          {sentence}
-        </AppText>
-        <View style={styles.sentenceHighlightStarEnd}>
-          <RoundStarIcon variant={2} size={starSize} />
-        </View>
-      </View>
-    </View>
+    <ValueQuote
+      style={styles.sentenceHighlight}
+      textStyle={styles.sentenceHighlightText}
+    >
+      {sentence}
+    </ValueQuote>
   );
 }
 
@@ -950,8 +909,12 @@ export default function OnboardingView() {
       setCategoryError('');
       setStep(3);
     } catch (error) {
-      console.error('API Error Detail:', error);
-      showAlert('연동 에러', formatApiErrorAlert(error));
+      logHandledApiError('API Error Detail', error);
+      showConnectionError({
+        onRetry: () => {
+          void handleAnalyze();
+        },
+      });
     } finally {
       setAnalyzing(false);
     }
@@ -986,8 +949,12 @@ export default function OnboardingView() {
       }
       setSaveError('온보딩이 완료되지 않았습니다. 다시 시도해 주세요.');
     } catch (error) {
-      console.error('API Error Detail:', error);
-      showAlert('연동 에러', formatApiErrorAlert(error));
+      logHandledApiError('API Error Detail', error);
+      showConnectionError({
+        onRetry: () => {
+          void handleFinish();
+        },
+      });
     } finally {
       setSaving(false);
     }

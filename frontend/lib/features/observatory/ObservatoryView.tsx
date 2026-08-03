@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,7 +18,9 @@ import {
   Palette,
   ResponsiveScreen,
   bottomNavigationInset,
+  showConnectionError,
   useResponsive,
+  useTabExitConfirm,
 } from '@/assets_shared';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
 
@@ -25,6 +28,7 @@ import { AstronomyLabTabs } from './AstronomyLabTabs';
 import { AstronomyReportView } from './AstronomyReportView';
 import { GalaxyStatisticsView } from './GalaxyStatisticsView';
 import type { LabSubTab } from './data';
+import { logHandledApiError } from '@/lib/api/logHandledApiError';
 
 /** 천문연구소 화면 (AstronomyLabScreen) */
 export default function ObservatoryView() {
@@ -33,13 +37,16 @@ export default function ObservatoryView() {
   const [activeTab, setActiveTab] = useState<LabSubTab>('stats');
   const [refreshKey, setRefreshKey] = useState(0);
   const [northStarText, setNorthStarText] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const { ExitConfirmModal } = useTabExitConfirm();
 
   const loadNorthStar = useCallback(async () => {
     try {
       const status = await getOnboardingStatus();
       setNorthStarText(status.north_star?.text?.trim() ?? '');
     } catch (error) {
-      console.error('Observatory north star load error:', error);
+      logHandledApiError('Observatory north star load error', error);
+      showConnectionError({ onRetry: () => void loadNorthStar() });
     }
   }, []);
 
@@ -48,6 +55,15 @@ export default function ObservatoryView() {
     setActiveTab('stats');
     void loadNorthStar();
   }, [loadNorthStar]);
+
+  const handlePullRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      handleRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [handleRefresh]);
 
   useEffect(() => {
     void loadNorthStar();
@@ -79,6 +95,16 @@ export default function ObservatoryView() {
             ]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => {
+                  void handlePullRefresh();
+                }}
+                tintColor={Palette.cream}
+                colors={[Palette.cream]}
+              />
+            }
           >
             {activeTab === 'stats' ? (
               <GalaxyStatisticsView
@@ -95,6 +121,7 @@ export default function ObservatoryView() {
         </SafeAreaView>
 
         <BottomNavigationBar activeTab="observatory" />
+        {ExitConfirmModal}
       </ResponsiveScreen>
     </AutoRefreshOnFocus>
   );

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -22,10 +23,10 @@ import {
   ValueQuote,
   getClusterLabelColor,
   polarisImage,
+  showConnectionError,
   withOpacity,
   type ClusterIndex,
 } from '@/assets_shared';
-import { formatApiErrorAlert } from '@/lib/api/client';
 import {
   getGalaxyReport,
   saveGalaxyReportReflection,
@@ -44,6 +45,7 @@ import {
   type ClusterItem,
 } from './data';
 import { panelSurface } from './panelStyles';
+import { logHandledApiError } from '@/lib/api/logHandledApiError';
 
 const SHAPE_STAR_0 = require('@/assets_shared/stars_png/ic_shapestar0.png');
 
@@ -64,29 +66,35 @@ export default function AstronomyReportDetailView() {
     typeof params.period === 'string' ? params.period : '';
 
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [report, setReport] = useState<GalaxyReportDetailResponse | null>(null);
   const [impression, setImpression] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [saving, setSaving] = useState(false);
+  const pendingSaveTextRef = useRef<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (isPull = false) => {
     if (!reportId) {
-      setError('리포트 ID가 없습니다.');
+      setHasError(true);
       setLoading(false);
+      showConnectionError({ onRetry: () => void load() });
       return;
     }
-    setLoading(true);
-    setError(null);
+    if (isPull) setRefreshing(true);
+    else setLoading(true);
+    setHasError(false);
     try {
       const detail = await getGalaxyReport(reportId);
       setReport(detail);
       setImpression(detail.reflection?.trim() ?? '');
     } catch (err) {
-      console.error('Galaxy report detail load error:', err);
-      setError(formatApiErrorAlert(err));
+      logHandledApiError('Galaxy report detail load error', err);
+      setHasError(true);
+      showConnectionError({ onRetry: () => void load() });
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [reportId]);
 
@@ -108,8 +116,16 @@ export default function AstronomyReportDetailView() {
         setReport(updated);
         setImpression(updated.reflection?.trim() ?? trimmed);
         setModalVisible(false);
+        pendingSaveTextRef.current = null;
       } catch (err) {
-        Alert.alert('저장 실패', formatApiErrorAlert(err));
+        logHandledApiError('Galaxy report reflection save error', err);
+        pendingSaveTextRef.current = trimmed;
+        showConnectionError({
+          onRetry: () => {
+            const pending = pendingSaveTextRef.current;
+            if (pending) void handleSave(pending);
+          },
+        });
       } finally {
         setSaving(false);
       }
@@ -206,15 +222,23 @@ export default function AstronomyReportDetailView() {
           <View style={styles.center}>
             <ActivityIndicator color={Palette.cream} size="large" />
           </View>
-        ) : error || !viewModel ? (
-          <View style={styles.center}>
-            <Text style={styles.errorText}>{error ?? '리포트를 불러오지 못했습니다.'}</Text>
-          </View>
+        ) : hasError || !viewModel ? (
+          <View style={styles.center} />
         ) : (
           <ScrollView
             style={styles.flex}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => {
+                  void load(true);
+                }}
+                tintColor={Palette.cream}
+                colors={[Palette.cream]}
+              />
+            }
           >
             <Text style={styles.reportTitle}>{viewModel.title}</Text>
             {viewModel.period ? (
@@ -409,13 +433,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
-  },
-  errorText: {
-    fontFamily: FontFamily.regular,
-    fontSize: 13,
-    lineHeight: 20,
-    color: Palette.cream,
-    textAlign: 'center',
   },
   scrollContent: {
     paddingHorizontal: 20,

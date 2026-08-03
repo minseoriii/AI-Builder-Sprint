@@ -1,26 +1,35 @@
 import { useEffect, useRef, useState } from 'react';
+import { LogBox } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, View } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
 import 'react-native-reanimated';
 
-import { useA2ZFonts, ResponsiveProvider } from '@/assets_shared';
+import {
+  BootSplash,
+  ConnectionErrorHost,
+  ResponsiveProvider,
+  useA2ZFonts,
+} from '@/assets_shared';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
+import { logHandledApiError } from '@/lib/api/logHandledApiError';
 
-function LoadingScreen() {
-  return (
-    <View
-      style={{
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#06101f',
-      }}
-    >
-      <ActivityIndicator color="#F8EEC1" />
-    </View>
-  );
-}
+/** 처리된 API 오류는 연결 모달로만 안내 — 하단 LogBox 토스트 완전 차단 */
+LogBox.ignoreLogs([
+  /ApiRequestError/,
+  /Cloudflare/,
+  /load error/i,
+  /API Error/i,
+  /Failed to fetch/i,
+  /origin web server/i,
+  /unable to reach/i,
+  /Network request failed/i,
+  /VirtualizedLists should never be nested/,
+  /VirtualizedList/,
+]);
+SplashScreen.preventAutoHideAsync().catch(() => {
+  // already hidden / unavailable
+});
 
 export default function RootLayout() {
   const [fontsLoaded] = useA2ZFonts();
@@ -30,10 +39,15 @@ export default function RootLayout() {
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(
     null,
   );
+  const [nativeSplashHidden, setNativeSplashHidden] = useState(false);
   const devBootRedirected = useRef(false);
 
   useEffect(() => {
     if (!fontsLoaded) return;
+
+    void SplashScreen.hideAsync()
+      .catch(() => undefined)
+      .finally(() => setNativeSplashHidden(true));
 
     // Expo Go 개발: reload마다 온보딩부터 (백엔드 완료 상태 무시)
     if (__DEV__) {
@@ -51,7 +65,7 @@ export default function RootLayout() {
           setOnboardingCompleted(status.onboarding_completed);
         }
       } catch (error) {
-        console.error('Onboarding status check failed:', error);
+        logHandledApiError('Onboarding status check failed', error);
         if (!cancelled) {
           setOnboardingCompleted(false);
         }
@@ -97,11 +111,12 @@ export default function RootLayout() {
 
   const canShowApp =
     fontsLoaded &&
+    nativeSplashHidden &&
     gateReady &&
     (__DEV__ || onboardingCompleted !== null);
 
   if (!canShowApp) {
-    return <LoadingScreen />;
+    return <BootSplash />;
   }
 
   const tabScreenOptions = {
@@ -128,6 +143,7 @@ export default function RootLayout() {
         <Stack.Screen name="mypage" options={tabScreenOptions} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
+      <ConnectionErrorHost />
       <StatusBar style="light" />
     </ResponsiveProvider>
   );

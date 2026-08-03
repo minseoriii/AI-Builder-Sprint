@@ -1,21 +1,17 @@
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  BackHandler,
   Image,
   Modal,
-  Platform,
   Pressable,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 
 import {
-  AppConfirmModal,
   AppText,
   Background,
   BottomNavigationBar,
@@ -29,12 +25,15 @@ import {
   ScreenLayout,
   ValueQuote,
   createResponsiveStylesContext,
+  showConnectionError,
   useAutoRefreshOnFocus,
   useResponsive,
+  useTabExitConfirm,
   withOpacity,
 } from '@/assets_shared';
 import type { ClusterIndex } from '@/assets_shared';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
+import { logHandledApiError } from '@/lib/api/logHandledApiError';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -188,7 +187,6 @@ function HomeScreen() {
   const r = useResponsive();
   const { width, height } = useWindowDimensions();
   const [modalOpen, setModalOpen] = useState(false);
-  const [exitModalOpen, setExitModalOpen] = useState(false);
   const [selectedCluster, setSelectedCluster] = useState<ClusterIndex | null>(
     null,
   );
@@ -197,6 +195,16 @@ function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { year, month, day, weekday, season } = getDateInfo();
+
+  const { ExitConfirmModal } = useTabExitConfirm({
+    onBeforeExit: () => {
+      if (modalOpen) {
+        setModalOpen(false);
+        return true;
+      }
+      return false;
+    },
+  });
 
   const loadHomeData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -207,7 +215,8 @@ function HomeScreen() {
       setClusters(categoriesToClusters(categories));
       setNorthStarText(status.north_star?.text?.trim() ?? '');
     } catch (error) {
-      console.error('Home onboarding load error:', error);
+      logHandledApiError('Home onboarding load error', error);
+      showConnectionError({ onRetry: () => void loadHomeData(isRefresh) });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -215,36 +224,6 @@ function HomeScreen() {
   }, []);
 
   useAutoRefreshOnFocus(() => loadHomeData(false));
-
-  useFocusEffect(
-    useCallback(() => {
-      if (Platform.OS !== 'android') return;
-
-      const onBackPress = () => {
-        if (exitModalOpen) {
-          setExitModalOpen(false);
-          return true;
-        }
-        if (modalOpen) {
-          setModalOpen(false);
-          return true;
-        }
-        setExitModalOpen(true);
-        return true;
-      };
-
-      const subscription = BackHandler.addEventListener(
-        'hardwareBackPress',
-        onBackPress,
-      );
-      return () => subscription.remove();
-    }, [exitModalOpen, modalOpen]),
-  );
-
-  const handleExitApp = () => {
-    setExitModalOpen(false);
-    BackHandler.exitApp();
-  };
 
   const maxContentW = r.width;
   const ORBIT_R = Math.max(r.scale(88), Math.min(r.scale(118), maxContentW * 0.3));
@@ -368,15 +347,7 @@ function HomeScreen() {
           northStarText={northStarText}
           onClose={() => setModalOpen(false)}
         />
-        <AppConfirmModal
-          visible={exitModalOpen}
-          title="앱을 종료하시겠습니까?"
-          message="별자리 기록은 다음에 이어서 할 수 있어요."
-          cancelLabel="취소"
-          confirmLabel="종료"
-          onCancel={() => setExitModalOpen(false)}
-          onConfirm={handleExitApp}
-        />
+        {ExitConfirmModal}
       </ResponsiveScreen>
     </StylesProvider>
   );
@@ -442,7 +413,7 @@ const HOME_STYLE_DEF = {
     padding: 12,
   },
   polarisLabel: {
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.medium,
     fontSize: 12,
     color: Palette.cream,
     letterSpacing: 0.48,

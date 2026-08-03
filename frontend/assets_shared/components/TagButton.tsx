@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, TextStyle, ViewStyle } from 'react-native';
 
+import { buttonContentCenter, buttonLabelCenter } from '../buttonStyles';
 import { Colors } from '../colors';
 import { useResponsive } from '../responsive';
 import { FontFamily, FontSize } from '../typography';
@@ -77,17 +78,15 @@ export function TagButton({
 
 const styles = StyleSheet.create({
   base: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    ...buttonContentCenter,
     alignSelf: 'flex-start',
     flexShrink: 0,
+    overflow: 'hidden',
   },
   label: {
     fontFamily: FontFamily.regular,
     color: Colors.text.tag,
-    textAlign: 'center',
-    textAlignVertical: 'center',
-    includeFontPadding: false,
+    ...buttonLabelCenter,
     flexShrink: 0,
   },
   labelActive: {

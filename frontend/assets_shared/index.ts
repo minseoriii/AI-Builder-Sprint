@@ -2,6 +2,7 @@ export { Palette, Colors, withOpacity } from './colors';
 export { ScreenLayout, DesignFrame, scaleDesign, onboardingContentTop } from './spacing';
 export { Radii } from './radii';
 export { FontFamily, FontSize, TextStyles } from './typography';
+export { buttonContentCenter, buttonLabelCenter } from './buttonStyles';
 
 export { useA2ZFonts } from './fonts';
 
@@ -20,6 +21,12 @@ export type { ValueQuoteProps } from './components/ValueQuote';
 export { AppConfirmModal } from './components/AppConfirmModal';
 export type { AppConfirmModalProps } from './components/AppConfirmModal';
 
+export { AppConnectionErrorModal } from './components/AppConnectionErrorModal';
+export type { AppConnectionErrorModalProps } from './components/AppConnectionErrorModal';
+
+export { BootSplash } from './components/BootSplash';
+export { ConnectionErrorHost } from './components/ConnectionErrorHost';
+
 export { ScreenContainer } from './components/ScreenContainer';
 export type { ScreenContainerProps } from './components/ScreenContainer';
 
@@ -29,6 +36,12 @@ export type { AutoRefreshOnFocusProps } from './components/AutoRefreshOnFocus';
 export { useAutoRefreshOnFocus } from './hooks/useAutoRefreshOnFocus';
 export type { AutoRefreshHandler } from './hooks/useAutoRefreshOnFocus';
 export { requestScreenRefresh, subscribeScreenRefresh } from './hooks/screenRefreshBus';
+export {
+  showConnectionError,
+  hideConnectionError,
+} from './hooks/connectionErrorBus';
+export { useTabExitConfirm } from './hooks/useTabExitConfirm';
+export type { UseTabExitConfirmOptions } from './hooks/useTabExitConfirm';
 
 export { BackButton, BackButtonTouchable } from './components/BackButton';
 export type { BackButtonProps } from './components/BackButton';

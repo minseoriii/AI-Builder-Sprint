@@ -46,7 +46,8 @@ const NAV_TABS: {
 ];
 
 const ACTIVE_COLOR = Palette.cream;
-const INACTIVE_COLOR = withOpacity(Palette.cream, 0.45);
+/** 비포커스 탭 — 회색 */
+const INACTIVE_COLOR = '#8B93A7';
 
 const CREAM = Palette.creamActive;
 
@@ -155,7 +156,7 @@ export function BottomNavigationBar({ activeTab }: BottomNavigationBarProps) {
                   {
                     fontSize: labelSize,
                     lineHeight: labelSize * 1.2,
-                    color: ACTIVE_COLOR,
+                    color: tint,
                   },
                   isActive && styles.labelActive,
                 ]}

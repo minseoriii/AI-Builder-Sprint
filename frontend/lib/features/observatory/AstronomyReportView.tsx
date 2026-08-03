@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-import { FontFamily, Palette } from '@/assets_shared';
-import { formatApiErrorAlert } from '@/lib/api/client';
+import { FontFamily, Palette, showConnectionError } from '@/assets_shared';
 import {
   getGalaxyOverview,
   listGalaxyReports,
@@ -21,6 +20,7 @@ import {
   isSameSeasonPeriod,
   type ReportItem,
 } from './data';
+import { logHandledApiError } from '@/lib/api/logHandledApiError';
 
 export interface AstronomyReportViewProps {
   northStarText?: string;
@@ -33,7 +33,7 @@ export function AstronomyReportView({
   refreshKey = 0,
 }: AstronomyReportViewProps) {
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false);
   const [locked, setLocked] = useState<{
     title: string;
     message: string;
@@ -43,7 +43,7 @@ export function AstronomyReportView({
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setHasError(false);
     try {
       const current = getCurrentSeasonPeriod();
       const { start, end } = getSeasonDateRange(current.year, current.season);
@@ -87,8 +87,9 @@ export function AstronomyReportView({
 
       setReports(past);
     } catch (err) {
-      console.error('Galaxy reports load error:', err);
-      setError(formatApiErrorAlert(err));
+      logHandledApiError('Galaxy reports load error', err);
+      setHasError(true);
+      showConnectionError({ onRetry: () => void load() });
     } finally {
       setLoading(false);
     }
@@ -106,12 +107,8 @@ export function AstronomyReportView({
     );
   }
 
-  if (error) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
-    );
+  if (hasError) {
+    return <View style={styles.center} />;
   }
 
   return (
@@ -147,13 +144,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  errorText: {
-    fontFamily: FontFamily.regular,
-    fontSize: 13,
-    lineHeight: 20,
-    color: Palette.cream,
-    textAlign: 'center',
   },
   emptyHint: {
     fontFamily: FontFamily.extraLight,

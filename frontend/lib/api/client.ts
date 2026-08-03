@@ -1,5 +1,18 @@
+import { showConnectionError } from '@/assets_shared/hooks/connectionErrorBus';
 import { getValidAccessToken, refreshAccessToken } from '@/lib/supabase';
 import { getApiBaseUrl } from '@/lib/env';
+
+/** 인라인 검증 UI로 처리하는 코드 — 전역 연결 모달 생략 */
+const INLINE_ERROR_CODES = new Set([
+  'INVALID_SELECTION',
+  'INVALID_REFLECTION',
+  'NORTH_STAR_SEASON_LOCKED',
+]);
+
+function reportConnectionError(error: ApiRequestError): void {
+  if (error.code && INLINE_ERROR_CODES.has(error.code)) return;
+  showConnectionError();
+}
 
 interface ApiErrorDetail {
   code?: string;
@@ -92,21 +105,9 @@ function extractErrorDetail(data: unknown): ApiErrorDetail {
   return {};
 }
 
-export function formatApiErrorAlert(error: unknown): string {
-  if (error instanceof ApiRequestError) {
-    const parts = ['[API 에러]'];
-    if (error.status != null) parts.push(String(error.status));
-    if (error.code) parts.push(error.code);
-    parts.push(error.message);
-    return `${parts.join(' ')}\nURL: ${error.url}`;
-  }
-  if (error instanceof Error && error.message) {
-    if (error.message.includes('Supabase env')) {
-      return error.message;
-    }
-    return `[API 에러] ${error.message}`;
-  }
-  return '[API 에러] Failed to fetch';
+export function formatApiErrorAlert(_error: unknown): string {
+  // 원문 API 에러는 사용자에게 노출하지 않음 — ConnectionErrorHost 모달 사용
+  return '우주와의 연결이 불안정한 상태입니다.';
 }
 
 async function parseResponseBody(raw: string): Promise<unknown> {
@@ -139,7 +140,9 @@ async function apiRequest<T>(
       networkError instanceof Error && networkError.message
         ? networkError.message
         : 'Failed to fetch';
-    throw new ApiRequestError(message, url, null, null);
+    const error = new ApiRequestError(message, url, null, null);
+    reportConnectionError(error);
+    throw error;
   }
 
   const raw = await response.text();
@@ -165,12 +168,14 @@ async function apiRequest<T>(
             : raw
           : response.statusText || `요청에 실패했습니다 (${response.status})`);
     const message = messageForErrorCode(detail.code, fallback);
-    throw new ApiRequestError(
+    const error = new ApiRequestError(
       message,
       url,
       response.status,
       detail.code ?? null,
     );
+    reportConnectionError(error);
+    throw error;
   }
 
   return data as T;

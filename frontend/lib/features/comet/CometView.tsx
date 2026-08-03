@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -7,8 +7,10 @@ import {
   AppText,
   AutoRefreshOnFocus,
   BottomNavigationBar,
+  Palette,
   ResponsiveScreen,
   useResponsiveStyles,
+  useTabExitConfirm,
 } from '@/assets_shared';
 
 const STYLE_DEF = {
@@ -16,7 +18,7 @@ const STYLE_DEF = {
     flex: 1,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
@@ -26,17 +28,27 @@ const STYLE_DEF = {
   title: {
     fontSize: 22,
   },
-  subtitle: {
-  },
+  subtitle: {},
 } as const;
 
 export default function CometView() {
   const styles = useResponsiveStyles(STYLE_DEF);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const { ExitConfirmModal } = useTabExitConfirm();
 
   const handleRefresh = useCallback(() => {
     setRefreshKey((key) => key + 1);
   }, []);
+
+  const handlePullRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      handleRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [handleRefresh]);
 
   return (
     <AutoRefreshOnFocus onRefresh={handleRefresh}>
@@ -47,14 +59,30 @@ export default function CometView() {
           style={StyleSheet.absoluteFill}
         />
         <SafeAreaView style={styles.safe} edges={['top']}>
-          <View style={styles.content}>
-            <AppText variant="emphasis" style={styles.title}>
-              혜성관측소
-            </AppText>
-            <AppText style={styles.subtitle}>준비 중입니다.</AppText>
-          </View>
+          <ScrollView
+            style={styles.safe}
+            contentContainerStyle={styles.content}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => {
+                  void handlePullRefresh();
+                }}
+                tintColor={Palette.cream}
+                colors={[Palette.cream]}
+              />
+            }
+          >
+            <View>
+              <AppText variant="emphasis" style={styles.title}>
+                혜성관측소
+              </AppText>
+              <AppText style={styles.subtitle}>준비 중입니다.</AppText>
+            </View>
+          </ScrollView>
         </SafeAreaView>
         <BottomNavigationBar activeTab="comet" />
+        {ExitConfirmModal}
       </ResponsiveScreen>
     </AutoRefreshOnFocus>
   );

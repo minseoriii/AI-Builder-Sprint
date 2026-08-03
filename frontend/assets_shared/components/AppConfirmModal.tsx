@@ -1,51 +1,13 @@
-import { Modal, Pressable, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { buttonContentCenter, buttonLabelCenter } from '../buttonStyles';
 import { Palette, withOpacity } from '../colors';
-import { useResponsiveStyles } from '../responsive';
+import { FontFamily } from '../typography';
 import { AppText } from './AppText';
-import { PrimaryButton } from './PrimaryButton';
 
-const STYLE_DEF = {
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(4, 10, 28, 0.72)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  cardWrap: {
-    width: '100%',
-    maxWidth: 340,
-  },
-  card: {
-    borderWidth: 1,
-    borderColor: withOpacity(Palette.cream, 0.3),
-    borderRadius: 20,
-    paddingVertical: 28,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-  },
-  title: {
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  message: {
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-  actions: {
-    width: '100%',
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'center',
-  },
-  actionBtn: {
-    flex: 1,
-    maxWidth: 150,
-  },
-} as const;
+const CREAM = Palette.cream;
+const PANEL_FILL = withOpacity(CREAM, 0.3);
+const PANEL_BORDER = withOpacity(CREAM, 0.6);
 
 export interface AppConfirmModalProps {
   visible: boolean;
@@ -57,7 +19,7 @@ export interface AppConfirmModalProps {
   onCancel: () => void;
 }
 
-/** 앱 분위기 확인 모달 — 애니메이션 없음 */
+/** 앱 종료 등 확인 모달 — 패널/버튼 F8EEC1 30% 채우기 · 60% 외곽선 */
 export function AppConfirmModal({
   visible,
   title,
@@ -67,8 +29,6 @@ export function AppConfirmModal({
   onConfirm,
   onCancel,
 }: AppConfirmModalProps) {
-  const styles = useResponsiveStyles(STYLE_DEF);
-
   return (
     <Modal
       visible={visible}
@@ -78,34 +38,106 @@ export function AppConfirmModal({
       statusBarTranslucent
     >
       <Pressable style={styles.overlay} onPress={onCancel}>
-        <Pressable style={styles.cardWrap} onPress={() => {}}>
-          <LinearGradient
-            colors={['#0f2050', '#0a1635']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.card}
-          >
-            <AppText variant="emphasis" style={styles.title}>
-              {title}
-            </AppText>
-            <AppText style={styles.message}>{message}</AppText>
-            <View style={styles.actions}>
-              <PrimaryButton
-                label={cancelLabel}
-                size="small"
-                onPress={onCancel}
-                style={styles.actionBtn}
-              />
-              <PrimaryButton
-                label={confirmLabel}
-                size="small"
-                onPress={onConfirm}
-                style={styles.actionBtn}
-              />
-            </View>
-          </LinearGradient>
+        <Pressable style={styles.card} onPress={() => {}}>
+          <AppText variant="emphasis" style={styles.title}>
+            {title}
+          </AppText>
+          <View style={styles.divider} />
+          <AppText style={styles.message}>{message}</AppText>
+          <View style={styles.actions}>
+            <Pressable
+              onPress={onCancel}
+              style={({ pressed }) => [
+                styles.btn,
+                pressed && styles.btnPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={cancelLabel}
+            >
+              <Text style={styles.btnLabel}>{cancelLabel}</Text>
+            </Pressable>
+            <Pressable
+              onPress={onConfirm}
+              style={({ pressed }) => [
+                styles.btn,
+                pressed && styles.btnPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={confirmLabel}
+            >
+              <Text style={styles.btnLabel}>{confirmLabel}</Text>
+            </Pressable>
+          </View>
         </Pressable>
       </Pressable>
     </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  card: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_FILL,
+    paddingVertical: 22,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  title: {
+    textAlign: 'center',
+    color: CREAM,
+    marginBottom: 12,
+  },
+  divider: {
+    alignSelf: 'stretch',
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: withOpacity(CREAM, 0.45),
+    marginBottom: 14,
+  },
+  message: {
+    textAlign: 'center',
+    lineHeight: 22,
+    color: CREAM,
+    marginBottom: 22,
+  },
+  actions: {
+    width: '100%',
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'center',
+  },
+  btn: {
+    flex: 1,
+    maxWidth: 150,
+    height: 42,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: PANEL_BORDER,
+    backgroundColor: PANEL_FILL,
+    ...buttonContentCenter,
+    paddingHorizontal: 12,
+    overflow: 'hidden',
+  },
+  btnPressed: {
+    opacity: 0.85,
+  },
+  btnLabel: {
+    fontFamily: FontFamily.light,
+    fontSize: 14,
+    lineHeight: 14,
+    letterSpacing: -0.2,
+    color: CREAM,
+    ...buttonLabelCenter,
+    width: '100%',
+  },
+});

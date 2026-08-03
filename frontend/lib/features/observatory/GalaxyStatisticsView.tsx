@@ -7,8 +7,15 @@ import {
   View,
 } from 'react-native';
 
-import { FontFamily, Palette, ValueQuote, polarisImage, withOpacity } from '@/assets_shared';
-import { formatApiErrorAlert } from '@/lib/api/client';
+import {
+  FontFamily,
+  Palette,
+  ValueQuote,
+  polarisImage,
+  showConnectionError,
+  withOpacity,
+} from '@/assets_shared';
+import { getHome, type HomeConstellation } from '@/lib/api/daily-records';
 import { getGalaxyOverview } from '@/lib/api/galaxy';
 
 import { ClusterProgressRow } from './ClusterProgressRow';
@@ -25,19 +32,37 @@ import {
   type SummaryItem,
 } from './data';
 import { panelSurface } from './panelStyles';
+import { logHandledApiError } from '@/lib/api/logHandledApiError';
+
+/** 별이 1개 이상인 별자리(성단 카테고리) 개수 */
+function countObservedConstellations(constellations: HomeConstellation[]): number {
+  return constellations.filter((c) => c.star_count > 0).length;
+}
+
+/** 별이 가장 많이 등록된 성단 이름 */
+function largestCategoryName(constellations: HomeConstellation[]): string {
+  let best: HomeConstellation | null = null;
+  for (const item of constellations) {
+    if (item.star_count <= 0) continue;
+    if (!best || item.star_count > best.star_count) {
+      best = item;
+    }
+  }
+  return best?.category ?? '-';
+}
 
 export interface GalaxyStatisticsViewProps {
   northStarText?: string;
   refreshKey?: number;
 }
 
-/** 은하 관측 통계 탭 — GET /api/v1/galaxy/overview */
+/** 은하 관측 통계 탭 — 요약은 GET /api/v1/home, 계절·노트는 overview */
 export function GalaxyStatisticsView({
   northStarText: northStarTextProp,
   refreshKey = 0,
 }: GalaxyStatisticsViewProps = {}) {
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false);
   const [title, setTitle] = useState('');
   const [period, setPeriod] = useState('');
   const [quote, setQuote] = useState(POLARIS_QUOTE);
@@ -47,40 +72,59 @@ export function GalaxyStatisticsView({
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setHasError(false);
     try {
-      const overview = await getGalaxyOverview();
-      const selected = overview.constellations.map((c) => c.category);
+      const [home, overview] = await Promise.all([
+        getHome(),
+        getGalaxyOverview(),
+      ]);
+
       const { start, end } = getSeasonDateRange(overview.year, overview.season);
       const dDay = daysUntilSeasonEnd(overview.year, overview.season);
       const northStar =
+        home.north_star_text?.trim() ||
         overview.north_star_text?.trim() ||
         northStarTextProp?.trim() ||
         POLARIS_QUOTE;
+
+      const selected = home.constellations
+        .filter((c) => c.selected_from_north_star)
+        .map((c) => c.category);
+      const totalStars = home.total_star_count;
+      const selectedRows = (
+        selected.length > 0
+          ? home.constellations.filter((c) => c.selected_from_north_star)
+          : home.constellations
+      ).map((c) => ({
+        category: c.category,
+        star_count: c.star_count,
+        ratio: totalStars > 0 ? c.star_count / totalStars : 0,
+      }));
 
       setTitle(buildStatsTitle(overview.year, overview.season_label));
       setPeriod(formatPeriodKo(start, end));
       setQuote(northStar);
       setSummaryItems([
-        { label: '전체 별', value: `${overview.total_star_count}개` },
+        { label: '전체 별', value: `${totalStars}개` },
         {
           label: '별자리',
-          value: `${overview.observed_constellation_count}개`,
+          value: `${countObservedConstellations(home.constellations)}개`,
         },
         {
           label: '주요 성단',
-          value: overview.largest_category?.category ?? '-',
+          value: largestCategoryName(home.constellations),
         },
         { label: '계절 종료', value: `D-${dDay}` },
       ]);
-      setClusters(toClusterItems(overview.constellations, selected));
+      setClusters(toClusterItems(selectedRows, selected));
       setNote(
         overview.summary.lines.filter(Boolean).join(' ') ||
           '아직 관측 요약이 없습니다.',
       );
     } catch (err) {
-      console.error('Galaxy overview load error:', err);
-      setError(formatApiErrorAlert(err));
+      logHandledApiError('Galaxy statistics load error', err);
+      setHasError(true);
+      showConnectionError({ onRetry: () => void load() });
     } finally {
       setLoading(false);
     }
@@ -98,12 +142,8 @@ export function GalaxyStatisticsView({
     );
   }
 
-  if (error) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
-    );
+  if (hasError) {
+    return <View style={styles.center} />;
   }
 
   return (
@@ -161,13 +201,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  errorText: {
-    fontFamily: FontFamily.regular,
-    fontSize: 13,
-    lineHeight: 20,
-    color: Palette.cream,
-    textAlign: 'center',
   },
   emptyHint: {
     fontFamily: FontFamily.extraLight,

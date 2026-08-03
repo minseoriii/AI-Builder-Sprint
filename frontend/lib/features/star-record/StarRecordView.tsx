@@ -33,6 +33,7 @@ import {
   ScreenContainer,
   ScreenLayout,
   scaleDesign,
+  showConnectionError,
   withOpacity,
 } from '@/assets_shared';
 import type { ClusterIndex } from '@/assets_shared';
@@ -50,6 +51,7 @@ import {
   updateDailyRecordDetails,
 } from '@/lib/api/daily-records';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
+import { logHandledApiError } from '@/lib/api/logHandledApiError';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -89,6 +91,22 @@ const TAG_META: TagMeta[] = [
   { key: 'activity', label: '활동', dimension: 'ACTIVITY' },
   { key: 'emotion', label: '감정', dimension: 'EMOTION' },
 ];
+
+/** 받침 유무에 따라 목적격 조사 을/를 */
+function particleEulReul(word: string): '을' | '를' {
+  const trimmed = word.trim();
+  if (!trimmed) return '를';
+  const last = trimmed.charCodeAt(trimmed.length - 1);
+  // 한글 음절: (code - 0xAC00) % 28 === 0 이면 받침 없음 → 를
+  if (last >= 0xac00 && last <= 0xd7a3) {
+    return (last - 0xac00) % 28 === 0 ? '를' : '을';
+  }
+  return '를';
+}
+
+function editPromptTitle(label: string): string {
+  return `${label}${particleEulReul(label)} 수정해주세요.`;
+}
 
 /** 온보딩 선택 성단 순서(1~5) → ic_cluster1~5 1:1 매핑 */
 function userClusterToIconIndex(
@@ -223,13 +241,6 @@ function mergeSupplementAnswer(
   }
 
   return sanitizeDailyRecordTags(next);
-}
-
-function showProcessError() {
-  Alert.alert(
-    '알림',
-    'AI 분석 응답이 지연되었습니다. 잠시 후 다시 시도해 주세요.',
-  );
 }
 
 // ─── Icons ─────────────────────────────────────────────────────────────────
@@ -467,7 +478,6 @@ function BaseScreen({
       <StarCreateHeader onBack={onBack} />
 
       <AppText
-        variant="emphasis"
         style={{
           ...styles.baseTitle,
           left: x(ScreenLayout.titleX),
@@ -573,7 +583,6 @@ function SupplementScreen({
       <StarCreateHeader onBack={onBack} />
 
       <AppText
-        variant="emphasis"
         onLayout={(e) => {
           const { y: layoutY, height: layoutH } = e.nativeEvent.layout;
           setTitleBottom(layoutY + layoutH);
@@ -676,7 +685,7 @@ function TagEditModal({
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{tagLabel}를 수정해주세요.</Text>
+              <Text style={styles.modalTitle}>{editPromptTitle(tagLabel)}</Text>
               <Pressable
                 onPress={onClose}
                 hitSlop={12}
@@ -758,7 +767,7 @@ function ConfirmScreen({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <AppText variant="emphasis" style={styles.confirmTitle}>
+        <AppText style={styles.confirmTitle}>
           관측을 완료했어요.
         </AppText>
         <AppText style={styles.confirmSubtitle}>
@@ -878,7 +887,7 @@ function CompleteScreen({
           { opacity: fadeIn, transform: [{ translateY: slideUp }] },
         ]}
       >
-        <AppText variant="emphasis" style={styles.confirmTitle}>
+        <AppText style={styles.confirmTitle}>
           새로운 별이 탄생했어요!
         </AppText>
         <AppText style={styles.confirmSubtitle}>
@@ -941,7 +950,7 @@ export default function StarRecordView() {
           setPrimaryCategory((prev) => prev || categories[0]);
         }
       } catch (error) {
-        console.error('Onboarding clusters load error:', error);
+        logHandledApiError('Onboarding clusters load error', error);
       }
     })();
     return () => {
@@ -972,8 +981,8 @@ export default function StarRecordView() {
       setScreen('confirm');
       return true;
     } catch (error) {
-      console.error('Daily record details error:', error);
-      showProcessError();
+      logHandledApiError('Daily record details error', error);
+      showConnectionError();
       return false;
     }
   };
@@ -992,7 +1001,7 @@ export default function StarRecordView() {
           clusters = status.north_star?.selected_categories ?? [];
           if (clusters.length > 0) setUserClusters(clusters);
         } catch (error) {
-          console.error('Onboarding clusters load error:', error);
+          logHandledApiError('Onboarding clusters load error', error);
         }
       }
 
@@ -1014,8 +1023,8 @@ export default function StarRecordView() {
       );
       if (!ok) setScreen('base');
     } catch (error) {
-      console.error('Daily record analyze error:', error);
-      showProcessError();
+      logHandledApiError('Daily record analyze error', error);
+      showConnectionError();
       setScreen('base');
     } finally {
       setSubmitting(false);
@@ -1072,14 +1081,14 @@ export default function StarRecordView() {
         );
         setStarIndex(constellation?.star_count ?? 1);
       } catch (homeError) {
-        console.error('Home sync error:', homeError);
+        logHandledApiError('Home sync error', homeError);
         setStarIndex(1);
       }
 
       setScreen('complete');
     } catch (error) {
-      console.error('Daily record confirm error:', error);
-      showProcessError();
+      logHandledApiError('Daily record confirm error', error);
+      showConnectionError();
       setScreen('confirm');
     } finally {
       setSubmitting(false);
@@ -1090,7 +1099,7 @@ export default function StarRecordView() {
     try {
       await getHome();
     } catch (error) {
-      console.error('Home refetch error:', error);
+      logHandledApiError('Home refetch error', error);
     } finally {
       router.replace('/');
     }
@@ -1207,7 +1216,7 @@ const styles = StyleSheet.create({
   // ─ STATE 1: base ─
   baseTitle: {
     position: 'absolute',
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.medium,
     fontSize: 18,
     color: '#FFF9DD',
     textAlign: 'center',
@@ -1310,11 +1319,14 @@ const styles = StyleSheet.create({
   bottomButtonText: {
     color: COLORS.white,
     fontSize: 16,
+    lineHeight: 16,
     fontWeight: '500',
     letterSpacing: 0.4,
     textAlign: 'center',
     textAlignVertical: 'center',
     includeFontPadding: false,
+    paddingTop: 0,
+    paddingBottom: 0,
   },
   bottomButtonTextDisabled: {
     color: 'rgba(255,255,255,0.35)',
@@ -1326,7 +1338,7 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   confirmTitle: {
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.medium,
     fontSize: 18,
     color: '#FFF9DD',
     textAlign: 'center',
@@ -1461,7 +1473,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: withOpacity(Palette.cream, 0.6),
-    backgroundColor: withOpacity(Palette.cream, 0.6),
+    backgroundColor: withOpacity(Palette.cream, 0.5),
     marginBottom: 16,
     overflow: 'hidden',
   },
@@ -1488,7 +1500,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
   },
   modalSaveLabel: {
-    fontFamily: FontFamily.medium,
+    fontFamily: FontFamily.light,
     fontSize: 15,
     lineHeight: 15,
     color: Palette.cream,

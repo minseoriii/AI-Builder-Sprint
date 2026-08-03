@@ -69,9 +69,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     textAlignVertical: 'center',
     includeFontPadding: false,
+    paddingTop: 0,
+    paddingBottom: 0,
   },
   labelActive: {
     fontFamily: FontFamily.medium,
     color: Palette.cream,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
 });

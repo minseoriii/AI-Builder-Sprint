@@ -12,6 +12,7 @@ export const ImageAssets = {
   ic_cluster4: require('./ic_cluster4.png'),
   ic_cluster5: require('./ic_cluster5.png'),
   ic_polaris: require('./ic_polaris.png'),
+  ic_Online: require('./ic_Online.png'),
   ic_roundstar1: require('./ic_roundstar1.png'),
   ic_roundstar2: require('../stars_png/ic_roundstar2.png'),
   ic_roundstar3: require('../stars_png/ic_roundstar3.png'),

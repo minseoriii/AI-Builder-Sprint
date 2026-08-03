@@ -5,6 +5,7 @@ import {
   Image,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -29,11 +30,12 @@ import {
   ScreenLayout,
   createResponsiveStylesContext,
   getClusterLabelColor,
+  showConnectionError,
   useAutoRefreshOnFocus,
   useResponsive,
+  useTabExitConfirm,
   withOpacity,
 } from '@/assets_shared';
-import { formatApiErrorAlert } from '@/lib/api/client';
 import { getDefaultGalaxyFilter, getGalaxyOverview, koreanSeasonToApi } from '@/lib/api/galaxy';
 import type { KoreanSeason } from '@/lib/api/galaxy';
 import { getConstellationStars } from '@/lib/api/stars';
@@ -53,6 +55,7 @@ import {
   type StarData,
   type StarTags,
 } from '@/lib/features/galaxy-view/galaxyData';
+import { logHandledApiError } from '@/lib/api/logHandledApiError';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -371,9 +374,13 @@ function GalleryCard({
 function GalleryView({
   items,
   onSelectItem,
+  refreshing,
+  onRefresh,
 }: {
   items: GalleryItem[];
   onSelectItem: (item: GalleryItem) => void;
+  refreshing?: boolean;
+  onRefresh?: () => void;
 }) {
   const styles = useStyles();
   const { width } = useWindowDimensions();
@@ -385,11 +392,24 @@ function GalleryView({
 
   if (items.length === 0) {
     return (
-      <View style={styles.emptyGallery}>
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={styles.emptyGallery}
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl
+              refreshing={!!refreshing}
+              onRefresh={onRefresh}
+              tintColor={CREAM}
+              colors={[CREAM]}
+            />
+          ) : undefined
+        }
+      >
         <Text style={styles.emptyGalleryText}>
           선택한 조건에 해당하는 별자리가 없습니다.
         </Text>
-      </View>
+      </ScrollView>
     );
   }
 
@@ -401,6 +421,16 @@ function GalleryView({
       columnWrapperStyle={styles.galleryRow}
       contentContainerStyle={styles.galleryList}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            refreshing={!!refreshing}
+            onRefresh={onRefresh}
+            tintColor={CREAM}
+            colors={[CREAM]}
+          />
+        ) : undefined
+      }
       renderItem={({ item, index }) => (
         <GalleryCard
           item={item}
@@ -424,6 +454,8 @@ function ConstellationView({
   onNext,
   onViewStars,
   onBack,
+  refreshing,
+  onRefresh,
 }: {
   cluster: ClusterData;
   constellation: ConstellationData;
@@ -433,6 +465,8 @@ function ConstellationView({
   onNext: () => void;
   onViewStars: () => void;
   onBack: () => void;
+  refreshing?: boolean;
+  onRefresh?: () => void;
 }) {
   const styles = useStyles();
   const clusterColor = getClusterLabelColor(cluster.index);
@@ -443,6 +477,16 @@ function ConstellationView({
       style={styles.flex}
       contentContainerStyle={styles.detailScroll}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            refreshing={!!refreshing}
+            onRefresh={onRefresh}
+            tintColor={CREAM}
+            colors={[CREAM]}
+          />
+        ) : undefined
+      }
     >
       <View style={styles.detailTopBar}>
         <BackIconButton onPress={onBack} />
@@ -543,6 +587,8 @@ function StarView({
   onPrev,
   onNext,
   onBack,
+  refreshing,
+  onRefresh,
 }: {
   cluster: ClusterData;
   constellation: ConstellationData;
@@ -551,6 +597,8 @@ function StarView({
   onPrev: () => void;
   onNext: () => void;
   onBack: () => void;
+  refreshing?: boolean;
+  onRefresh?: () => void;
 }) {
   const styles = useStyles();
   const [recordVisible, setRecordVisible] = useState(false);
@@ -565,6 +613,16 @@ function StarView({
         style={styles.flex}
         contentContainerStyle={styles.detailScroll}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl
+              refreshing={!!refreshing}
+              onRefresh={onRefresh}
+              tintColor={CREAM}
+              colors={[CREAM]}
+            />
+          ) : undefined
+        }
       >
         <View style={styles.detailTopBar}>
           <BackIconButton onPress={onBack} />
@@ -761,7 +819,9 @@ export default function GalaxyView() {
   const [selectedGalleryIdx, setSelectedGalleryIdx] = useState(0);
   const [clusters, setClusters] = useState<ClusterData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const { ExitConfirmModal } = useTabExitConfirm();
 
   const galleryItems = useMemo(() => buildGalleryItems(clusters), [clusters]);
   const filteredItems = useMemo(
@@ -776,7 +836,7 @@ export default function GalaxyView() {
 
   const loadGalaxyData = useCallback(async (activeFilter: GalaxyFilter) => {
     setLoading(true);
-    setError(null);
+    setHasError(false);
     try {
       const apiSeason = koreanSeasonToApi(activeFilter.season);
       const overview = await getGalaxyOverview(activeFilter.year, apiSeason);
@@ -794,9 +854,12 @@ export default function GalaxyView() {
       );
       setClusters(buildClustersFromOverview(overview, starsByCategory, activeFilter));
     } catch (loadError) {
-      console.error('Galaxy overview load error:', loadError);
-      setError(formatApiErrorAlert(loadError));
+      logHandledApiError('Galaxy overview load error', loadError);
+      setHasError(true);
       setClusters([]);
+      showConnectionError({
+        onRetry: () => void loadGalaxyData(activeFilter),
+      });
     } finally {
       setLoading(false);
     }
@@ -874,6 +937,15 @@ export default function GalaxyView() {
     setCurrentView('GALLERY');
   };
 
+  const handlePullRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadGalaxyData(filter);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [filter, loadGalaxyData]);
+
   const headerSubtitle = `"${filter.year}년 ${filter.season}의 은하에서 관측된 빛"`;
 
   return (
@@ -910,22 +982,18 @@ export default function GalaxyView() {
               <View style={styles.loadingState}>
                 <ActivityIndicator color={CREAM} size="large" />
               </View>
-            ) : error ? (
-              <View style={styles.emptyGallery}>
-                <Text style={styles.emptyGalleryText}>{error}</Text>
-                <TouchableOpacity
-                  onPress={() => loadGalaxyData(filter)}
-                  activeOpacity={0.85}
-                  style={styles.retryBtn}
-                >
-                  <Text style={styles.retryBtnText}>다시 시도</Text>
-                </TouchableOpacity>
-              </View>
             ) : null}
-            {!loading && !error && currentView === 'GALLERY' ? (
-              <GalleryView items={filteredItems} onSelectItem={handleGallerySelect} />
+            {!loading && !hasError && currentView === 'GALLERY' ? (
+              <GalleryView
+                items={filteredItems}
+                onSelectItem={handleGallerySelect}
+                refreshing={refreshing}
+                onRefresh={() => {
+                  void handlePullRefresh();
+                }}
+              />
             ) : null}
-            {!loading && !error && currentView === 'CONSTELLATION' && cluster && constellation ? (
+            {!loading && !hasError && currentView === 'CONSTELLATION' && cluster && constellation ? (
               <ConstellationView
                 cluster={cluster}
                 constellation={constellation}
@@ -935,9 +1003,13 @@ export default function GalaxyView() {
                 onNext={nextConst}
                 onViewStars={handleViewStars}
                 onBack={() => setCurrentView('GALLERY')}
+                refreshing={refreshing}
+                onRefresh={() => {
+                  void handlePullRefresh();
+                }}
               />
             ) : null}
-            {!loading && !error && currentView === 'STAR' && cluster && constellation ? (
+            {!loading && !hasError && currentView === 'STAR' && cluster && constellation ? (
               <StarView
                 cluster={cluster}
                 constellation={constellation}
@@ -946,12 +1018,17 @@ export default function GalaxyView() {
                 onPrev={prevStar}
                 onNext={nextStar}
                 onBack={() => setCurrentView('CONSTELLATION')}
+                refreshing={refreshing}
+                onRefresh={() => {
+                  void handlePullRefresh();
+                }}
               />
             ) : null}
           </View>
         </ScreenContainer>
 
         <BottomNavigationBar activeTab="galaxy" />
+        {ExitConfirmModal}
 
         <GalaxyFilterModal
           visible={filterVisible}
@@ -981,7 +1058,7 @@ const GALAXY_STYLE_DEF = {
     paddingBottom: 8,
   },
   headerTitle: {
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.medium,
     fontSize: 25,
     color: CREAM,
     letterSpacing: -0.5,
@@ -1019,7 +1096,11 @@ const GALAXY_STYLE_DEF = {
   filterPillText: {
     fontFamily: FontFamily.regular,
     fontSize: 15,
+    lineHeight: 15,
     color: CREAM_ACTIVE,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
 
   filterOverlay: {
@@ -1047,7 +1128,7 @@ const GALAXY_STYLE_DEF = {
     zIndex: 2,
   },
   filterSheetTitle: {
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.medium,
     fontSize: 18,
     color: CREAM,
     marginBottom: 20,
@@ -1098,7 +1179,11 @@ const GALAXY_STYLE_DEF = {
   filterApplyBtnText: {
     fontFamily: FontFamily.medium,
     fontSize: 15,
+    lineHeight: 15,
     color: CREAM_ACTIVE,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
 
   emptyGallery: {
@@ -1120,20 +1205,6 @@ const GALAXY_STYLE_DEF = {
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: 80,
-  },
-  retryBtn: {
-    marginTop: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: Radii.button,
-    borderWidth: 1,
-    borderColor: CREAM_BORDER,
-    backgroundColor: CREAM_FILL,
-  },
-  retryBtnText: {
-    fontFamily: FontFamily.medium,
-    fontSize: 15,
-    color: CREAM,
   },
 
   content: {
@@ -1271,7 +1342,7 @@ const GALAXY_STYLE_DEF = {
     marginTop: 20,
   },
   detailTitle: {
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.medium,
     fontSize: 17,
     color: CREAM,
     textAlign: 'center',
@@ -1338,7 +1409,7 @@ const GALAXY_STYLE_DEF = {
     width: '100%',
   },
   recordTitle: {
-    fontFamily: FontFamily.bold,
+    fontFamily: FontFamily.medium,
     fontSize: 16,
     color: CREAM,
     marginBottom: 12,
@@ -1373,7 +1444,11 @@ const GALAXY_STYLE_DEF = {
   recordConfirmBtnText: {
     fontFamily: FontFamily.regular,
     fontSize: 15,
+    lineHeight: 15,
     color: CREAM_ACTIVE,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
 } as const;
 
