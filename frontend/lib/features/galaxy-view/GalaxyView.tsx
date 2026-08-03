@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
-  Platform,
+  Image,
+  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,635 +13,94 @@ import {
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Circle, Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg';
+import Svg, { Line, Path } from 'react-native-svg';
 
 import {
+  Background,
   BottomNavigationBar,
+  ClusterIcon,
+  FontFamily,
+  ImageAssets,
+  Palette,
+  PrimaryButton,
+  Radii,
   ResponsiveScreen,
+  ScreenContainer,
+  ScreenLayout,
   createResponsiveStylesContext,
+  getClusterLabelColor,
   useAutoRefreshOnFocus,
   useResponsive,
+  withOpacity,
 } from '@/assets_shared';
+import { formatApiErrorAlert } from '@/lib/api/client';
+import { getDefaultGalaxyFilter, getGalaxyOverview, koreanSeasonToApi } from '@/lib/api/galaxy';
+import type { KoreanSeason } from '@/lib/api/galaxy';
+import { getConstellationStars } from '@/lib/api/stars';
+import {
+  applyGalleryItem,
+  buildClustersFromOverview,
+  buildGalleryItems,
+  filterGalleryItems,
+  getCountLabel,
+  getOrderLabel,
+  hashSeed,
+  resolveConstellationStars,
+  type ClusterData,
+  type ConstellationData,
+  type GalaxyFilter,
+  type GalleryItem,
+  type StarData,
+  type StarTags,
+} from '@/lib/features/galaxy-view/galaxyData';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 type CurrentView = 'GALLERY' | 'CONSTELLATION' | 'STAR';
 
-type StarTags = {
-  who: string;
-  place: string;
-  time: string;
-  act: string;
-  emotion: string;
-};
-
-type StarData = {
-  id: number;
-  num: string;
-  birthDate: string;
-  tags: StarTags;
-};
-
-type ConstellationData = {
-  id: number;
-  num: string;
-  birthDate: string;
-  starCount: number;
-  points: number[][];
-  lines: number[][];
-  stars: StarData[];
-};
-
-type ClusterData = {
+type ClusterOption = {
   id: string;
   name: string;
-  constellations: ConstellationData[];
 };
 
-type GalleryItem = {
-  id: string;
-  clusterId: string;
-  constellationId: number;
-  clusterName: string;
-  num: string;
-  date: string;
-  points: number[][];
-  lines: number[][];
-};
+const SHAPE_STAR_IMAGES = [
+  ImageAssets.ic_shapestar1,
+  ImageAssets.ic_shapestar2,
+  ImageAssets.ic_shapestar3,
+  ImageAssets.ic_shapestar4,
+] as const;
 
-// ─── Dummy Data ────────────────────────────────────────────────────────────
+const SEASONS: KoreanSeason[] = ['봄', '여름', '가을', '겨울'];
 
-const CLUSTERS: ClusterData[] = [
-  {
-    id: 'ac',
-    name: '모험·도전',
-    constellations: [
-      {
-        id: 1,
-        num: '첫',
-        birthDate: '2026년 7월 8일',
-        starCount: 5,
-        points: [
-          [55, 30],
-          [110, 55],
-          [90, 110],
-          [40, 120],
-          [20, 75],
-        ],
-        lines: [
-          [0, 1],
-          [1, 2],
-          [2, 3],
-          [3, 4],
-          [4, 0],
-          [1, 3],
-        ],
-        stars: [
-          {
-            id: 1,
-            num: '첫',
-            birthDate: '2026년 6월 9일',
-            tags: {
-              who: '대학 동기',
-              place: '부산대학교 넉넉한 터',
-              time: '늦은 밤',
-              act: '캔맥주를 마심',
-              emotion: '시원함',
-            },
-          },
-          {
-            id: 2,
-            num: '두',
-            birthDate: '2026년 6월 18일',
-            tags: {
-              who: '친구들',
-              place: '해운대 바닷가',
-              time: '저녁 무렵',
-              act: '모래사장을 걷다',
-              emotion: '설렘',
-            },
-          },
-          {
-            id: 3,
-            num: '세',
-            birthDate: '2026년 6월 25일',
-            tags: {
-              who: '혼자',
-              place: '광안리 카페',
-              time: '오후 3시',
-              act: '글쓰기',
-              emotion: '고요함',
-            },
-          },
-          {
-            id: 4,
-            num: '네',
-            birthDate: '2026년 7월 2일',
-            tags: {
-              who: '팀원',
-              place: '남포동 골목',
-              time: '저녁 7시',
-              act: '맛집 탐방',
-              emotion: '유쾌함',
-            },
-          },
-          {
-            id: 5,
-            num: '다섯',
-            birthDate: '2026년 7월 8일',
-            tags: {
-              who: '선배',
-              place: '부산역 근처',
-              time: '자정',
-              act: '이야기 나누기',
-              emotion: '감사함',
-            },
-          },
-        ],
-      },
-      {
-        id: 2,
-        num: '두',
-        birthDate: '2026년 7월 20일',
-        starCount: 5,
-        points: [
-          [30, 40],
-          [100, 30],
-          [120, 90],
-          [70, 130],
-          [10, 100],
-        ],
-        lines: [
-          [0, 1],
-          [1, 2],
-          [2, 3],
-          [3, 4],
-          [4, 0],
-          [0, 2],
-        ],
-        stars: [
-          {
-            id: 1,
-            num: '첫',
-            birthDate: '2026년 7월 10일',
-            tags: {
-              who: '동생',
-              place: '서면 카페',
-              time: '오후 2시',
-              act: '커피 마시기',
-              emotion: '여유로움',
-            },
-          },
-          {
-            id: 2,
-            num: '두',
-            birthDate: '2026년 7월 12일',
-            tags: {
-              who: '친구',
-              place: '영도 다리',
-              time: '석양 무렵',
-              act: '사진 찍기',
-              emotion: '낭만',
-            },
-          },
-          {
-            id: 3,
-            num: '세',
-            birthDate: '2026년 7월 14일',
-            tags: {
-              who: '혼자',
-              place: '감천문화마을',
-              time: '아침 10시',
-              act: '산책',
-              emotion: '평온함',
-            },
-          },
-          {
-            id: 4,
-            num: '네',
-            birthDate: '2026년 7월 17일',
-            tags: {
-              who: '동료',
-              place: '해운대 횟집',
-              time: '저녁 6시',
-              act: '회식',
-              emotion: '뿌듯함',
-            },
-          },
-          {
-            id: 5,
-            num: '다섯',
-            birthDate: '2026년 7월 20일',
-            tags: {
-              who: '연인',
-              place: '달맞이 언덕',
-              time: '밤 9시',
-              act: '야경 감상',
-              emotion: '행복',
-            },
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'gr',
-    name: '건강',
-    constellations: [
-      {
-        id: 1,
-        num: '첫',
-        birthDate: '2026년 7월 12일',
-        starCount: 5,
-        points: [
-          [60, 20],
-          [110, 45],
-          [130, 100],
-          [80, 140],
-          [20, 110],
-        ],
-        lines: [
-          [0, 1],
-          [1, 2],
-          [2, 3],
-          [3, 4],
-          [4, 0],
-          [0, 3],
-          [1, 3],
-        ],
-        stars: [
-          {
-            id: 1,
-            num: '첫',
-            birthDate: '2026년 7월 1일',
-            tags: {
-              who: '운동 친구',
-              place: '한강 공원',
-              time: '이른 아침',
-              act: '조깅',
-              emotion: '활력',
-            },
-          },
-          {
-            id: 2,
-            num: '두',
-            birthDate: '2026년 7월 4일',
-            tags: {
-              who: '가족',
-              place: '집 근처 공원',
-              time: '저녁 6시',
-              act: '산책',
-              emotion: '포근함',
-            },
-          },
-          {
-            id: 3,
-            num: '세',
-            birthDate: '2026년 7월 7일',
-            tags: {
-              who: '혼자',
-              place: '헬스장',
-              time: '오전 7시',
-              act: '웨이트 트레이닝',
-              emotion: '성취감',
-            },
-          },
-          {
-            id: 4,
-            num: '네',
-            birthDate: '2026년 7월 10일',
-            tags: {
-              who: '트레이너',
-              place: '수영장',
-              time: '오전 6시',
-              act: '수영',
-              emotion: '상쾌함',
-            },
-          },
-          {
-            id: 5,
-            num: '다섯',
-            birthDate: '2026년 7월 12일',
-            tags: {
-              who: '동네 친구',
-              place: '자전거 도로',
-              time: '오후 5시',
-              act: '자전거 타기',
-              emotion: '자유로움',
-            },
-          },
-        ],
-      },
-      {
-        id: 2,
-        num: '두',
-        birthDate: '2026년 7월 25일',
-        starCount: 5,
-        points: [
-          [55, 20],
-          [115, 40],
-          [125, 100],
-          [75, 140],
-          [10, 110],
-          [5, 55],
-        ],
-        lines: [
-          [0, 1],
-          [1, 2],
-          [2, 3],
-          [3, 4],
-          [4, 5],
-          [5, 0],
-          [1, 4],
-        ],
-        stars: [
-          {
-            id: 1,
-            num: '첫',
-            birthDate: '2026년 7월 15일',
-            tags: {
-              who: '러닝 크루',
-              place: '올림픽 공원',
-              time: '새벽 5시',
-              act: '마라톤 연습',
-              emotion: '도전',
-            },
-          },
-          {
-            id: 2,
-            num: '두',
-            birthDate: '2026년 7월 18일',
-            tags: {
-              who: '친구',
-              place: '요가 스튜디오',
-              time: '오후 7시',
-              act: '요가',
-              emotion: '평화로움',
-            },
-          },
-          {
-            id: 3,
-            num: '세',
-            birthDate: '2026년 7월 20일',
-            tags: {
-              who: '혼자',
-              place: '등산로',
-              time: '오전 8시',
-              act: '등산',
-              emotion: '성취감',
-            },
-          },
-          {
-            id: 4,
-            num: '네',
-            birthDate: '2026년 7월 22일',
-            tags: {
-              who: '동생',
-              place: '배드민턴장',
-              time: '저녁 8시',
-              act: '배드민턴',
-              emotion: '즐거움',
-            },
-          },
-          {
-            id: 5,
-            num: '다섯',
-            birthDate: '2026년 7월 25일',
-            tags: {
-              who: '가족',
-              place: '근처 공원',
-              time: '저녁 7시',
-              act: '가족 체조',
-              emotion: '따뜻함',
-            },
-          },
-        ],
-      },
-    ],
-  },
-];
-
-const GALLERY_ITEMS: GalleryItem[] = [
-  {
-    id: 'g1',
-    clusterId: 'gr',
-    constellationId: 1,
-    clusterName: '건강',
-    num: '첫',
-    date: '2026년 7월 12일',
-    points: [
-      [55, 25],
-      [105, 50],
-      [125, 105],
-      [65, 135],
-      [15, 100],
-      [10, 50],
-    ],
-    lines: [
-      [0, 1],
-      [1, 2],
-      [2, 3],
-      [3, 4],
-      [4, 5],
-      [5, 0],
-      [0, 3],
-    ],
-  },
-  {
-    id: 'g2',
-    clusterId: 'ac',
-    constellationId: 1,
-    clusterName: '모험·도전',
-    num: '첫',
-    date: '2026년 7월 8일',
-    points: [
-      [65, 20],
-      [120, 50],
-      [105, 110],
-      [45, 130],
-      [15, 80],
-    ],
-    lines: [
-      [0, 1],
-      [1, 2],
-      [2, 3],
-      [3, 4],
-      [4, 0],
-      [0, 2],
-      [1, 3],
-    ],
-  },
-  {
-    id: 'g3',
-    clusterId: 'ac',
-    constellationId: 1,
-    clusterName: '모험·도전',
-    num: '첫',
-    date: '2026년 7월 8일',
-    points: [
-      [70, 30],
-      [125, 55],
-      [110, 115],
-      [50, 135],
-      [10, 85],
-    ],
-    lines: [
-      [0, 1],
-      [1, 2],
-      [2, 3],
-      [3, 4],
-      [4, 0],
-      [1, 3],
-    ],
-  },
-  {
-    id: 'g4',
-    clusterId: 'gr',
-    constellationId: 1,
-    clusterName: '건강',
-    num: '첫',
-    date: '2026년 7월 12일',
-    points: [
-      [55, 20],
-      [110, 40],
-      [130, 95],
-      [80, 130],
-      [20, 115],
-      [5, 60],
-    ],
-    lines: [
-      [0, 1],
-      [1, 2],
-      [2, 3],
-      [3, 4],
-      [4, 5],
-      [5, 0],
-      [0, 2],
-    ],
-  },
-  {
-    id: 'g5',
-    clusterId: 'ac',
-    constellationId: 2,
-    clusterName: '모험·도전',
-    num: '두',
-    date: '2026년 7월 20일',
-    points: [
-      [40, 30],
-      [105, 25],
-      [130, 85],
-      [70, 125],
-      [10, 90],
-    ],
-    lines: [
-      [0, 1],
-      [1, 2],
-      [2, 3],
-      [3, 4],
-      [4, 0],
-      [1, 3],
-    ],
-  },
-  {
-    id: 'g6',
-    clusterId: 'gr',
-    constellationId: 2,
-    clusterName: '건강',
-    num: '두',
-    date: '2026년 7월 25일',
-    points: [
-      [60, 15],
-      [120, 45],
-      [115, 110],
-      [55, 140],
-      [15, 105],
-      [10, 45],
-    ],
-    lines: [
-      [0, 1],
-      [1, 2],
-      [2, 3],
-      [3, 4],
-      [4, 5],
-      [5, 0],
-      [1, 4],
-    ],
-  },
-];
-
-const FILTER_PILLS = ['2026년', '여름', '성단 선택'] as const;
-
-const STAR_TAGS_ORDER: { key: keyof StarTags; label: string }[] = [
-  { key: 'who', label: '함께한 사람' },
-  { key: 'place', label: '장소' },
-  { key: 'time', label: '시간' },
-  { key: 'act', label: '한 일' },
-  { key: 'emotion', label: '감정' },
-];
-
-const COLORS = {
-  bgDeep: '#060812',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#A0AAB0',
-  textMuted: '#6C7A89',
-  textSubtitle: '#6C8AA0',
-  cyan: '#00F5FF',
-  gold: '#FFD966',
-  purple: '#8A2BE2',
-  borderSubtle: 'rgba(255,255,255,0.08)',
-};
-
-// ─── Star field ────────────────────────────────────────────────────────────
-
-const STAR_DOTS = [
-  { x: 0.08, y: 0.07, s: 1.5, o: 0.35 },
-  { x: 0.82, y: 0.12, s: 1.2, o: 0.25 },
-  { x: 0.55, y: 0.05, s: 1.8, o: 0.4 },
-  { x: 0.2, y: 0.22, s: 1.2, o: 0.3 },
-  { x: 0.9, y: 0.35, s: 2, o: 0.45 },
-  { x: 0.05, y: 0.48, s: 1.2, o: 0.28 },
-  { x: 0.75, y: 0.58, s: 1.5, o: 0.32 },
-  { x: 0.35, y: 0.78, s: 1.2, o: 0.22 },
-  { x: 0.92, y: 0.72, s: 1.8, o: 0.38 },
-  { x: 0.15, y: 0.88, s: 1.2, o: 0.3 },
-  { x: 0.6, y: 0.92, s: 1.5, o: 0.26 },
-  { x: 0.45, y: 0.18, s: 1.2, o: 0.34 },
-  { x: 0.28, y: 0.4, s: 1.5, o: 0.2 },
-  { x: 0.68, y: 0.28, s: 1.2, o: 0.42 },
-  { x: 0.12, y: 0.65, s: 1.8, o: 0.28 },
-  { x: 0.88, y: 0.15, s: 1.2, o: 0.36 },
-  { x: 0.42, y: 0.55, s: 1.5, o: 0.24 },
-  { x: 0.7, y: 0.82, s: 1.2, o: 0.4 },
-  { x: 0.5, y: 0.35, s: 1.8, o: 0.18 },
-  { x: 0.18, y: 0.12, s: 1.2, o: 0.33 },
-];
-
-function StarField() {
-  const styles = useStyles();
-  const { width, height } = useWindowDimensions();
-
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {STAR_DOTS.map((st, i) => (
-        <View
-          key={i}
-          style={[
-            styles.starDot,
-            {
-              left: width * st.x,
-              top: height * st.y,
-              width: st.s,
-              height: st.s,
-              borderRadius: st.s / 2,
-              opacity: st.o,
-            },
-          ]}
-        />
-      ))}
-    </View>
-  );
+function buildFilterYears(): number[] {
+  const current = new Date().getFullYear();
+  return [current - 1, current];
 }
+
+function buildDefaultFilter(): GalaxyFilter {
+  const { year, season } = getDefaultGalaxyFilter();
+  return { year, season, cluster: 'all' };
+}
+
+function pickShapeStarImage(seed: number) {
+  return SHAPE_STAR_IMAGES[Math.abs(seed) % SHAPE_STAR_IMAGES.length];
+}
+
+function buildRecordFromTags(tags: StarTags): string {
+  return `${tags.who}와 ${tags.place}에서 ${tags.time} ${tags.act}. ${tags.emotion}한 순간이었다.`;
+}
+
+function getStarRecord(star: StarData): string {
+  return star.recordText ?? buildRecordFromTags(star.tags);
+}
+
+const CREAM = Palette.cream;
+const CREAM_ACTIVE = Palette.creamActive;
+const CREAM_BORDER = withOpacity(Palette.cream, 0.6);
+const CREAM_FILL = withOpacity(Palette.cream, 0.3);
+const CREAM_FILL_45 = withOpacity(Palette.cream, 0.45);
+const CREAM_FADED = withOpacity(Palette.cream, 0.55);
+const FILTER_DIM = 'rgba(0, 0, 0, 0.7)';
 
 // ─── SVG Graphics ──────────────────────────────────────────────────────────
 
@@ -647,149 +109,143 @@ function ConstellationSVG({
   lines,
   size = 150,
   small = false,
+  seed = 0,
 }: {
   points: number[][];
   lines: number[][];
   size?: number;
   small?: boolean;
+  seed?: number;
 }) {
   const pad = small ? 10 : 16;
-  const xs = points.map((p) => p[0]);
-  const ys = points.map((p) => p[1]);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  const rangeX = maxX - minX || 1;
-  const rangeY = maxY - minY || 1;
-  const scale = (size - pad * 2) / Math.max(rangeX, rangeY);
-  const offsetX = (size - rangeX * scale) / 2;
-  const offsetY = (size - rangeY * scale) / 2;
+  const starSize = small ? 16 : 22;
 
-  const mapped = points.map(([x, y]) => [
-    (x - minX) * scale + offsetX,
-    (y - minY) * scale + offsetY,
-  ]);
+  const mapped = useMemo(() => {
+    const xs = points.map((p) => p[0]);
+    const ys = points.map((p) => p[1]);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const rangeX = maxX - minX || 1;
+    const rangeY = maxY - minY || 1;
+    const scale = (size - pad * 2) / Math.max(rangeX, rangeY);
+    const offsetX = (size - rangeX * scale) / 2;
+    const offsetY = (size - rangeY * scale) / 2;
 
-  const dotR = small ? 2 : 3;
-  const glowR = small ? 4 : 6;
+    return points.map(([x, y]) => [
+      (x - minX) * scale + offsetX,
+      (y - minY) * scale + offsetY,
+    ]);
+  }, [points, size, pad]);
+
+  const starSources = useMemo(
+    () =>
+      mapped.map((_, i) =>
+        (i + seed) % 2 === 0 ? ImageAssets.ic_roundstar1 : ImageAssets.ic_roundstar2,
+      ),
+    [mapped, seed],
+  );
 
   return (
-    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      {lines.map(([a, b], i) => (
-        <Line
-          key={`line-${i}`}
-          x1={mapped[a][0]}
-          y1={mapped[a][1]}
-          x2={mapped[b][0]}
-          y2={mapped[b][1]}
-          stroke="rgba(255,215,100,0.45)"
-          strokeWidth={small ? 0.8 : 1.2}
+    <View style={{ width: size, height: size }}>
+      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        {lines.map(([a, b], i) => (
+          <Line
+            key={`line-${i}`}
+            x1={mapped[a][0]}
+            y1={mapped[a][1]}
+            x2={mapped[b][0]}
+            y2={mapped[b][1]}
+            stroke="rgba(255,215,100,0.45)"
+            strokeWidth={small ? 0.8 : 1.2}
+          />
+        ))}
+      </Svg>
+      {mapped.map(([x, y], i) => (
+        <Image
+          key={`star-${i}`}
+          source={starSources[i]}
+          style={{
+            position: 'absolute',
+            left: x - starSize / 2,
+            top: y - starSize / 2,
+            width: starSize,
+            height: starSize,
+          }}
+          resizeMode="contain"
         />
       ))}
-      {mapped.map(([x, y], i) => (
-        <Circle key={`glow-${i}`} cx={x} cy={y} r={glowR} fill="rgba(255,200,80,0.12)" />
-      ))}
-      {mapped.map(([x, y], i) => (
-        <Circle key={`dot-${i}`} cx={x} cy={y} r={dotR} fill="#FFD966" opacity={0.95} />
-      ))}
-      {mapped.map(([x, y], i) => (
-        <Circle key={`core-${i}`} cx={x} cy={y} r={dotR * 0.5} fill="#FFF5CC" />
-      ))}
-    </Svg>
+    </View>
   );
 }
 
-function GlowingStar({ size = 150 }: { size?: number }) {
-  const cx = size / 2;
-  const cy = size / 2;
+function NavArrowButton({
+  direction,
+  onPress,
+  disabled = false,
+}: {
+  direction: 'prev' | 'next';
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  const styles = useStyles();
+  const iconSize = 56;
+  const fill = disabled ? withOpacity(CREAM, 0.28) : CREAM;
 
   return (
-    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <Defs>
-        <RadialGradient id="starGrad" cx="50%" cy="50%" r="50%">
-          <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="1" />
-          <Stop offset="20%" stopColor="#00F5FF" stopOpacity="0.9" />
-          <Stop offset="60%" stopColor="#00C8FF" stopOpacity="0.4" />
-          <Stop offset="100%" stopColor="#0088CC" stopOpacity="0" />
-        </RadialGradient>
-      </Defs>
-      <Circle cx={cx} cy={cy} r={40} fill="rgba(0,245,255,0.08)" />
-      <Circle cx={cx} cy={cy} r={24} fill="rgba(0,245,255,0.15)" />
-      <Circle cx={cx} cy={cy} r={10} fill="url(#starGrad)" />
-      <Circle cx={cx} cy={cy} r={5} fill="#FFFFFF" opacity={0.95} />
-      {[0, 90].map((angle) => {
-        const rad = (angle * Math.PI) / 180;
-        return (
-          <Line
-            key={`spike-${angle}`}
-            x1={cx + Math.cos(rad) * 35}
-            y1={cy + Math.sin(rad) * 35}
-            x2={cx - Math.cos(rad) * 35}
-            y2={cy - Math.sin(rad) * 35}
-            stroke="rgba(0,245,255,0.6)"
-            strokeWidth={1}
-          />
-        );
-      })}
-      {[45, 135].map((angle) => {
-        const rad = (angle * Math.PI) / 180;
-        return (
-          <Line
-            key={`diag-${angle}`}
-            x1={cx + Math.cos(rad) * 18}
-            y1={cy + Math.sin(rad) * 18}
-            x2={cx - Math.cos(rad) * 18}
-            y2={cy - Math.sin(rad) * 18}
-            stroke="rgba(0,245,255,0.35)"
-            strokeWidth={0.7}
-          />
-        );
-      })}
-    </Svg>
+    <TouchableOpacity
+      onPress={onPress}
+      disabled={disabled}
+      activeOpacity={0.7}
+      style={[styles.arrowBtn, disabled && styles.arrowDisabled]}
+    >
+      <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24">
+        <Path
+          d={direction === 'prev' ? 'M14 5L6 12L14 19V5Z' : 'M10 5L18 12L10 19V5Z'}
+          fill={fill}
+        />
+      </Svg>
+    </TouchableOpacity>
   );
 }
 
-function ClusterIcon({ small = false }: { small?: boolean }) {
-  const s = small ? 26 : 32;
+function ShapeStarDisplay({ seed, size = 72 }: { seed: number; size?: number }) {
   return (
-    <Svg width={s} height={s} viewBox="0 0 32 32">
-      <Circle cx={16} cy={16} r={6} fill="#00F5FF" opacity={0.9} />
-      <Circle cx={16} cy={16} r={3} fill="#FFFFFF" />
-      {[
-        [16, 4],
-        [28, 12],
-        [28, 20],
-        [16, 28],
-        [4, 20],
-        [4, 12],
-      ].map(([x, y], i) => (
-        <Circle key={i} cx={x} cy={y} r={2} fill="#A78BFA" opacity={0.8} />
-      ))}
-    </Svg>
+    <Image
+      source={pickShapeStarImage(seed)}
+      style={{ width: size, height: size }}
+      resizeMode="contain"
+    />
   );
 }
 
-// ─── Shared CTA ────────────────────────────────────────────────────────────
+const MEDIUM_BTN_RADIUS = 999;
 
-function PrimaryButton({ label, onPress }: { label: string; onPress: () => void }) {
+function GalaxyPrimaryButton({
+  label,
+  onPress,
+}: {
+  label: string;
+  onPress: () => void;
+}) {
   const styles = useStyles();
 
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.88} style={styles.primaryBtn}>
-      <LinearGradient
-        colors={['rgba(0,245,255,0.25)', 'rgba(138,43,226,0.35)']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
+    <View style={styles.ctaBtnWrap}>
+      <PrimaryButton
+        label={label}
+        size="medium"
+        onPress={onPress}
+        style={{ borderRadius: MEDIUM_BTN_RADIUS }}
       />
-      <Text style={styles.primaryBtnText}>{label}</Text>
-    </TouchableOpacity>
+    </View>
   );
 }
 
 function BackIconButton({ onPress }: { onPress: () => void }) {
   const styles = useStyles();
+  const iconSize = 48;
 
   return (
     <TouchableOpacity
@@ -800,16 +256,35 @@ function BackIconButton({ onPress }: { onPress: () => void }) {
       accessibilityRole="button"
       accessibilityLabel="뒤로가기"
     >
-      <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+      <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none">
         <Path
           d="M15 18L9 12L15 6"
-          stroke={COLORS.textSecondary}
-          strokeWidth={2}
+          stroke={CREAM}
+          strokeWidth={1.5}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
       </Svg>
     </TouchableOpacity>
+  );
+}
+
+function ClusterDetailHeader({
+  cluster,
+  birthDate,
+}: {
+  cluster: ClusterData;
+  birthDate: string;
+}) {
+  const styles = useStyles();
+
+  return (
+    <View style={styles.clusterHeader}>
+      <ClusterIcon cluster={cluster.index} label={cluster.name} iconSize={48} />
+      <Text style={[styles.clusterBirth, styles.clusterBirthTop]}>
+        {`${birthDate} 탄생`}
+      </Text>
+    </View>
   );
 }
 
@@ -863,31 +338,64 @@ function GalleryCard({
             ]}
           />
         ))}
-        <ConstellationSVG points={item.points} lines={item.lines} size={120} small />
+        <ConstellationSVG
+          points={item.points}
+          lines={item.lines}
+          size={120}
+          small
+          seed={hashSeed(item.id)}
+        />
       </View>
       <View style={styles.galleryCardBody}>
-        <View style={styles.galleryCardRow}>
-          <Text style={styles.galleryCardTitle}>
-            {item.clusterName} 성단의{'\n'}
-            {item.num} 번째 별자리
+        <Text style={styles.galleryCardTitle}>
+          <Text style={{ color: getClusterLabelColor(item.clusterIndex) }}>
+            {item.clusterName}
           </Text>
-          <Text style={styles.galleryCardDate}>{item.date}</Text>
+          <Text style={styles.galleryCardTitleRest}>
+            {` 성단의\n${item.orderLabel} 번째 별자리`}
+          </Text>
+        </Text>
+        <View style={styles.galleryCardFooter}>
+          <Text style={styles.galleryCardDate}>{`${item.date} 탄생`}</Text>
+          <Image
+            source={ImageAssets.ic_shapestar4}
+            style={styles.galleryCardStarIcon}
+            resizeMode="contain"
+          />
         </View>
       </View>
     </TouchableOpacity>
   );
 }
 
-function GalleryView({ onSelectItem }: { onSelectItem: (item: GalleryItem) => void }) {
+function GalleryView({
+  items,
+  onSelectItem,
+}: {
+  items: GalleryItem[];
+  onSelectItem: (item: GalleryItem) => void;
+}) {
   const styles = useStyles();
   const { width } = useWindowDimensions();
+  const { scale } = useResponsive();
   const gap = 12;
-  const horizontalPad = 16;
-  const cardWidth = (width - horizontalPad * 2 - gap) / 2;
+  const horizontalPad = scale(ScreenLayout.horizontal);
+  const contentWidth = width - horizontalPad * 2;
+  const cardWidth = (contentWidth - gap) / 2;
+
+  if (items.length === 0) {
+    return (
+      <View style={styles.emptyGallery}>
+        <Text style={styles.emptyGalleryText}>
+          선택한 조건에 해당하는 별자리가 없습니다.
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <FlatList
-      data={GALLERY_ITEMS}
+      data={items}
       keyExtractor={(item) => item.id}
       numColumns={2}
       columnWrapperStyle={styles.galleryRow}
@@ -910,6 +418,8 @@ function GalleryView({ onSelectItem }: { onSelectItem: (item: GalleryItem) => vo
 function ConstellationView({
   cluster,
   constellation,
+  canPrev,
+  canNext,
   onPrev,
   onNext,
   onViewStars,
@@ -917,12 +427,16 @@ function ConstellationView({
 }: {
   cluster: ClusterData;
   constellation: ConstellationData;
+  canPrev: boolean;
+  canNext: boolean;
   onPrev: () => void;
   onNext: () => void;
   onViewStars: () => void;
   onBack: () => void;
 }) {
   const styles = useStyles();
+  const clusterColor = getClusterLabelColor(cluster.index);
+  const starCount = resolveConstellationStars(constellation).length;
 
   return (
     <ScrollView
@@ -934,55 +448,104 @@ function ConstellationView({
         <BackIconButton onPress={onBack} />
       </View>
 
-      <View style={styles.clusterHeader}>
-        <ClusterIcon />
-        <Text style={styles.clusterName}>{cluster.name}</Text>
-        <Text style={styles.clusterBirth}>{constellation.birthDate} 탄생</Text>
-      </View>
+      <ClusterDetailHeader
+        cluster={cluster}
+        birthDate={constellation.birthDate}
+      />
 
       <View style={styles.viewerRow}>
-        <TouchableOpacity onPress={onPrev} activeOpacity={0.7} style={styles.arrowBtn}>
-          <Text style={styles.arrowText}>‹</Text>
-        </TouchableOpacity>
+        <NavArrowButton direction="prev" onPress={onPrev} disabled={!canPrev} />
 
         <View style={styles.constFrame}>
           <ConstellationSVG
             points={constellation.points}
             lines={constellation.lines}
             size={150}
+            seed={hashSeed(`${cluster.id}-${constellation.id}`)}
           />
         </View>
 
-        <TouchableOpacity onPress={onNext} activeOpacity={0.7} style={styles.arrowBtn}>
-          <Text style={styles.arrowText}>›</Text>
-        </TouchableOpacity>
+        <NavArrowButton direction="next" onPress={onNext} disabled={!canNext} />
       </View>
 
       <View style={styles.detailInfo}>
         <Text style={styles.detailTitle}>
-          {cluster.name} 성단의 {constellation.num} 번째 별자리
+          <Text style={{ color: clusterColor }}>{cluster.name}</Text>
+          <Text style={{ color: CREAM }}>
+            {` 성단의 ${constellation.num} 번째 별자리`}
+          </Text>
         </Text>
-        <Text style={styles.detailSub}>{constellation.starCount}개의 별로 구성</Text>
+        <Text style={styles.detailSubMuted}>
+          {`${getCountLabel(starCount)} 개의 별로 구성`}
+        </Text>
       </View>
 
       <View style={styles.ctaBlock}>
-        <PrimaryButton label="별자리 관측하기" onPress={onViewStars} />
+        <GalaxyPrimaryButton label="별자리 관측하기" onPress={onViewStars} />
       </View>
     </ScrollView>
   );
 }
 
-// ─── Star View ─────────────────────────────────────────────────────────────
+function RecordModal({
+  visible,
+  text,
+  onClose,
+}: {
+  visible: boolean;
+  text: string;
+  onClose: () => void;
+}) {
+  const styles = useStyles();
+  const { height: windowHeight } = useWindowDimensions();
+  const scrollMaxHeight = Math.min(windowHeight * 0.32, 240);
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <Pressable style={styles.recordOverlay} onPress={onClose}>
+        <Pressable style={styles.recordCardWrap} onPress={() => {}}>
+          <View style={styles.recordCard}>
+            <Text style={styles.recordTitle}>기록</Text>
+            <View style={styles.recordDivider} />
+            <ScrollView
+              style={{ maxHeight: scrollMaxHeight }}
+              contentContainerStyle={styles.recordScrollContent}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+              <Text style={styles.recordBody}>{text}</Text>
+            </ScrollView>
+            <TouchableOpacity
+              onPress={onClose}
+              activeOpacity={0.88}
+              style={styles.recordConfirmBtn}
+            >
+              <Text style={styles.recordConfirmBtnText}>확인</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
 
 function StarView({
-  clusterName,
+  cluster,
+  constellation,
   stars,
   starIdx,
   onPrev,
   onNext,
   onBack,
 }: {
-  clusterName: string;
+  cluster: ClusterData;
+  constellation: ConstellationData;
   stars: StarData[];
   starIdx: number;
   onPrev: () => void;
@@ -990,71 +553,195 @@ function StarView({
   onBack: () => void;
 }) {
   const styles = useStyles();
-  const star = stars[starIdx];
-  const isFirst = starIdx === 0;
-  const isLast = starIdx === stars.length - 1;
+  const [recordVisible, setRecordVisible] = useState(false);
+  const safeIdx = stars.length > 0 ? starIdx % stars.length : 0;
+  const star = stars[safeIdx];
+  const clusterColor = getClusterLabelColor(cluster.index);
+  const starOrderLabel = getOrderLabel(safeIdx + 1);
 
   return (
-    <ScrollView
-      style={styles.flex}
-      contentContainerStyle={styles.detailScroll}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.detailTopBar}>
-        <BackIconButton onPress={onBack} />
-      </View>
-
-      <View style={styles.clusterHeader}>
-        <ClusterIcon />
-        <Text style={styles.clusterName}>{clusterName}</Text>
-        <Text style={styles.clusterBirth}>{star.birthDate} 탄생</Text>
-      </View>
-
-      <View style={styles.viewerRow}>
-        <TouchableOpacity
-          onPress={onPrev}
-          disabled={isFirst}
-          activeOpacity={0.7}
-          style={[styles.arrowBtn, isFirst && styles.arrowDisabled]}
-        >
-          <Text style={[styles.arrowText, isFirst && styles.arrowTextDisabled]}>‹</Text>
-        </TouchableOpacity>
-
-        <View style={styles.starFrame}>
-          <GlowingStar size={150} />
+    <>
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={styles.detailScroll}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.detailTopBar}>
+          <BackIconButton onPress={onBack} />
         </View>
 
-        <TouchableOpacity
-          onPress={onNext}
-          disabled={isLast}
-          activeOpacity={0.7}
-          style={[styles.arrowBtn, isLast && styles.arrowDisabled]}
-        >
-          <Text style={[styles.arrowText, isLast && styles.arrowTextDisabled]}>›</Text>
-        </TouchableOpacity>
-      </View>
+        {!star ? null : (
+          <>
+            <ClusterDetailHeader
+              cluster={cluster}
+              birthDate={constellation.birthDate}
+            />
 
-      <View style={styles.detailInfo}>
-        <Text style={styles.detailTitle}>
-          {clusterName} 성단의 {star.num} 번째 별
-        </Text>
+            <View style={styles.viewerRow}>
+              <NavArrowButton direction="prev" onPress={onPrev} />
 
-        <View style={styles.tagList}>
-          {STAR_TAGS_ORDER.map((tag) => (
-            <View key={tag.key} style={styles.tagRow}>
-              <Text style={styles.tagLabel}>{tag.label}</Text>
-              <View style={styles.tagPill}>
-                <Text style={styles.tagValue}>{star.tags[tag.key]}</Text>
+              <View style={styles.starFrame}>
+                <ShapeStarDisplay
+                  seed={hashSeed(`${cluster.id}-${constellation.id}-${star.id}`)}
+                  size={72}
+                />
+              </View>
+
+              <NavArrowButton direction="next" onPress={onNext} />
+            </View>
+
+            <View style={styles.detailInfo}>
+              <Text style={styles.detailTitle}>
+                <Text style={{ color: clusterColor }}>{cluster.name}</Text>
+                <Text style={{ color: CREAM }}>
+                  {` 성단의 ${starOrderLabel} 번째 별`}
+                </Text>
+              </Text>
+              <Text style={styles.detailSubMuted}>
+                {`${cluster.name} 성단의 ${constellation.num} 번째 별자리, ${star.num} 번째 별`}
+              </Text>
+
+              <View style={styles.starTagList}>
+                {[
+                  star.tags.who,
+                  star.tags.place,
+                  star.tags.time,
+                  star.tags.act,
+                  star.tags.emotion,
+                ].map((value, index) => (
+                  <Text key={`${value}-${index}`} style={styles.starTagItem}>
+                    {value}
+                  </Text>
+                ))}
               </View>
             </View>
-          ))}
-        </View>
-      </View>
 
-      <View style={styles.ctaBlock}>
-        <PrimaryButton label="기록 확인하기" onPress={() => {}} />
+            <View style={styles.ctaBlock}>
+              <GalaxyPrimaryButton
+                label="기록 확인하기"
+                onPress={() => setRecordVisible(true)}
+              />
+            </View>
+          </>
+        )}
+      </ScrollView>
+
+      {star ? (
+        <RecordModal
+          visible={recordVisible}
+          text={getStarRecord(star)}
+          onClose={() => setRecordVisible(false)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+// ─── Filter Modal ──────────────────────────────────────────────────────────
+
+function FilterChip({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const styles = useStyles();
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.85}
+      style={[styles.filterChip, selected && styles.filterChipSelected]}
+    >
+      <Text style={[styles.filterChipText, selected && styles.filterChipTextSelected]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+function GalaxyFilterModal({
+  visible,
+  draft,
+  clusterOptions,
+  onChange,
+  onApply,
+  onClose,
+}: {
+  visible: boolean;
+  draft: GalaxyFilter;
+  clusterOptions: ClusterOption[];
+  onChange: (next: GalaxyFilter) => void;
+  onApply: () => void;
+  onClose: () => void;
+}) {
+  const styles = useStyles();
+  const filterYears = buildFilterYears();
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <View style={styles.filterOverlay}>
+        <View style={styles.filterDimLayer} pointerEvents="none" />
+        <Pressable style={styles.filterScrimTap} onPress={onClose} />
+        <Pressable style={styles.filterSheet} onPress={() => {}}>
+          <Text style={styles.filterSheetTitle}>필터</Text>
+
+          <Text style={styles.filterSectionLabel}>연도</Text>
+          <View style={styles.filterChipRow}>
+            {filterYears.map((year) => (
+              <FilterChip
+                key={year}
+                label={String(year)}
+                selected={draft.year === year}
+                onPress={() => onChange({ ...draft, year })}
+              />
+            ))}
+          </View>
+
+          <Text style={styles.filterSectionLabel}>계절</Text>
+          <View style={styles.filterChipRow}>
+            {SEASONS.map((season) => (
+              <FilterChip
+                key={season}
+                label={season}
+                selected={draft.season === season}
+                onPress={() => onChange({ ...draft, season })}
+              />
+            ))}
+          </View>
+
+          <Text style={styles.filterSectionLabel}>성단</Text>
+          <View style={styles.filterChipRow}>
+            <FilterChip
+              label="전체"
+              selected={draft.cluster === 'all'}
+              onPress={() => onChange({ ...draft, cluster: 'all' })}
+            />
+            {clusterOptions.map((cluster) => (
+              <FilterChip
+                key={cluster.id}
+                label={cluster.name}
+                selected={draft.cluster === cluster.id}
+                onPress={() => onChange({ ...draft, cluster: cluster.id })}
+              />
+            ))}
+          </View>
+
+          <TouchableOpacity onPress={onApply} activeOpacity={0.88} style={styles.filterApplyBtn}>
+            <Text style={styles.filterApplyBtnText}>필터 적용</Text>
+          </TouchableOpacity>
+        </Pressable>
       </View>
-    </ScrollView>
+    </Modal>
   );
 }
 
@@ -1062,37 +749,98 @@ function StarView({
 
 export default function GalaxyView() {
   const styles = useScreenStyles(GALAXY_STYLE_DEF);
+  const { width, height } = useWindowDimensions();
   const [currentView, setCurrentView] = useState<CurrentView>('GALLERY');
   const [clusterIdx, setClusterIdx] = useState(0);
   const [constIdx, setConstIdx] = useState(0);
   const [starIdx, setStarIdx] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [filter, setFilter] = useState<GalaxyFilter>(() => buildDefaultFilter());
+  const [filterDraft, setFilterDraft] = useState<GalaxyFilter>(() => buildDefaultFilter());
+  const [filterVisible, setFilterVisible] = useState(false);
+  const [selectedGalleryIdx, setSelectedGalleryIdx] = useState(0);
+  const [clusters, setClusters] = useState<ClusterData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const galleryItems = useMemo(() => buildGalleryItems(clusters), [clusters]);
+  const filteredItems = useMemo(
+    () => filterGalleryItems(galleryItems, filter),
+    [galleryItems, filter],
+  );
+
+  const clusterOptions = useMemo<ClusterOption[]>(
+    () => clusters.map((cluster) => ({ id: cluster.id, name: cluster.name })),
+    [clusters],
+  );
+
+  const loadGalaxyData = useCallback(async (activeFilter: GalaxyFilter) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const apiSeason = koreanSeasonToApi(activeFilter.season);
+      const overview = await getGalaxyOverview(activeFilter.year, apiSeason);
+      const categoriesWithStars = overview.constellations.filter(
+        (item) => item.star_count > 0,
+      );
+      const starsResponses = await Promise.all(
+        categoriesWithStars.map((item) => getConstellationStars(item.category)),
+      );
+      const starsByCategory = Object.fromEntries(
+        categoriesWithStars.map((item, index) => [
+          item.category,
+          starsResponses[index]?.stars ?? [],
+        ]),
+      );
+      setClusters(buildClustersFromOverview(overview, starsByCategory, activeFilter));
+    } catch (loadError) {
+      console.error('Galaxy overview load error:', loadError);
+      setError(formatApiErrorAlert(loadError));
+      setClusters([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadGalaxyData(filter);
+  }, [filter, loadGalaxyData]);
 
   useAutoRefreshOnFocus(() => {
+    const nextFilter = buildDefaultFilter();
     setRefreshKey((key) => key + 1);
+    setFilter(nextFilter);
+    setFilterDraft(nextFilter);
     setCurrentView('GALLERY');
     setClusterIdx(0);
     setConstIdx(0);
     setStarIdx(0);
+    setSelectedGalleryIdx(0);
   });
 
-  const cluster = CLUSTERS[clusterIdx];
-  const constellation = cluster.constellations[constIdx];
-  const stars = constellation.stars;
+  const cluster = clusters[clusterIdx];
+  const constellation = cluster?.constellations[constIdx];
+  const navigableStars = useMemo(
+    () => (constellation ? resolveConstellationStars(constellation) : []),
+    [constellation],
+  );
 
   const handleGallerySelect = (item: GalleryItem) => {
-    const nextClusterIdx = CLUSTERS.findIndex((c) => c.id === item.clusterId);
-    if (nextClusterIdx < 0) return;
-
-    const nextConstIdx = CLUSTERS[nextClusterIdx].constellations.findIndex(
-      (c) => c.id === item.constellationId,
-    );
-    if (nextConstIdx < 0) return;
-
-    setClusterIdx(nextClusterIdx);
-    setConstIdx(nextConstIdx);
+    const idx = filteredItems.findIndex((entry) => entry.id === item.id);
+    setSelectedGalleryIdx(idx >= 0 ? idx : 0);
+    applyGalleryItem(item, clusters, setClusterIdx, setConstIdx);
     setStarIdx(0);
     setCurrentView('CONSTELLATION');
+  };
+
+  const navigateGallery = (delta: number) => {
+    const len = filteredItems.length;
+    if (len === 0) return;
+
+    const nextIdx = (selectedGalleryIdx + delta + len) % len;
+    setSelectedGalleryIdx(nextIdx);
+    applyGalleryItem(filteredItems[nextIdx], clusters, setClusterIdx, setConstIdx);
+    setStarIdx(0);
   };
 
   const handleViewStars = () => {
@@ -1100,74 +848,100 @@ export default function GalaxyView() {
     setCurrentView('STAR');
   };
 
-  const prevConst = () => {
-    const len = cluster.constellations.length;
-    setConstIdx((i) => (i - 1 + len) % len);
-    setStarIdx(0);
+  const prevConst = () => navigateGallery(-1);
+  const nextConst = () => navigateGallery(1);
+
+  const prevStar = () => {
+    const len = navigableStars.length;
+    if (len <= 1) return;
+    setStarIdx((i) => (i - 1 + len) % len);
   };
 
-  const nextConst = () => {
-    const len = cluster.constellations.length;
-    setConstIdx((i) => (i + 1) % len);
-    setStarIdx(0);
+  const nextStar = () => {
+    const len = navigableStars.length;
+    if (len <= 1) return;
+    setStarIdx((i) => (i + 1) % len);
   };
 
-  const prevStar = () => setStarIdx((i) => Math.max(0, i - 1));
-  const nextStar = () => setStarIdx((i) => Math.min(stars.length - 1, i + 1));
+  const openFilter = () => {
+    setFilterDraft(filter);
+    setFilterVisible(true);
+  };
+
+  const applyFilter = () => {
+    setFilter(filterDraft);
+    setFilterVisible(false);
+    setCurrentView('GALLERY');
+  };
+
+  const headerSubtitle = `"${filter.year}년 ${filter.season}의 은하에서 관측된 빛"`;
 
   return (
     <StylesProvider styles={styles}>
-      <ResponsiveScreen key={refreshKey} style={{ backgroundColor: COLORS.bgDeep }}>
-        <LinearGradient
-          colors={['#0F1430', '#0B0D1B', '#090C20', '#0D0F24']}
-          locations={[0, 0.35, 0.65, 1]}
-          style={StyleSheet.absoluteFill}
-        />
-        <StarField />
+      <ResponsiveScreen key={refreshKey}>
+        <Background width={width} height={height} />
 
-        {/* Nebula glow blobs */}
-        <View style={styles.nebulaPurple} pointerEvents="none" />
-        <View style={styles.nebulaCyan} pointerEvents="none" />
-        <View style={styles.nebulaViolet} pointerEvents="none" />
-
-        <SafeAreaView style={styles.flex} edges={['top']}>
-          {/* Header */}
+        <ScreenContainer
+          withSafeArea={false}
+          withTopPadding
+          topPadding={ScreenLayout.top}
+          withHorizontalPadding
+          style={styles.flex}
+          contentStyle={styles.screenContent}
+        >
           <View style={styles.header}>
             <Text style={styles.headerTitle}>은하감상</Text>
-            <Text style={styles.headerSubtitle}>
-              &quot;2026년 여름의 은하에서 관측된 빛&quot;
-            </Text>
+            <Text style={styles.headerSubtitle}>{headerSubtitle}</Text>
           </View>
 
-          {/* Filter pills only — no mode tabs */}
           <View style={styles.filterRow}>
-            {FILTER_PILLS.map((label) => (
-              <TouchableOpacity key={label} activeOpacity={0.85} style={styles.filterPill}>
-                <Text style={styles.filterPillText}>{label}</Text>
-                <Text style={styles.filterCaret}>▾</Text>
-              </TouchableOpacity>
-            ))}
+            <TouchableOpacity
+              onPress={openFilter}
+              activeOpacity={0.85}
+              style={styles.filterPill}
+            >
+              <Text style={styles.filterPillIcon}>≡</Text>
+              <Text style={styles.filterPillText}>필터 보기</Text>
+            </TouchableOpacity>
           </View>
 
-          {/* Content */}
           <View style={styles.content}>
-            {currentView === 'GALLERY' ? (
-              <GalleryView onSelectItem={handleGallerySelect} />
+            {loading ? (
+              <View style={styles.loadingState}>
+                <ActivityIndicator color={CREAM} size="large" />
+              </View>
+            ) : error ? (
+              <View style={styles.emptyGallery}>
+                <Text style={styles.emptyGalleryText}>{error}</Text>
+                <TouchableOpacity
+                  onPress={() => loadGalaxyData(filter)}
+                  activeOpacity={0.85}
+                  style={styles.retryBtn}
+                >
+                  <Text style={styles.retryBtnText}>다시 시도</Text>
+                </TouchableOpacity>
+              </View>
             ) : null}
-            {currentView === 'CONSTELLATION' ? (
+            {!loading && !error && currentView === 'GALLERY' ? (
+              <GalleryView items={filteredItems} onSelectItem={handleGallerySelect} />
+            ) : null}
+            {!loading && !error && currentView === 'CONSTELLATION' && cluster && constellation ? (
               <ConstellationView
                 cluster={cluster}
                 constellation={constellation}
+                canPrev={filteredItems.length > 1}
+                canNext={filteredItems.length > 1}
                 onPrev={prevConst}
                 onNext={nextConst}
                 onViewStars={handleViewStars}
                 onBack={() => setCurrentView('GALLERY')}
               />
             ) : null}
-            {currentView === 'STAR' ? (
+            {!loading && !error && currentView === 'STAR' && cluster && constellation ? (
               <StarView
-                clusterName={cluster.name}
-                stars={stars}
+                cluster={cluster}
+                constellation={constellation}
+                stars={navigableStars}
                 starIdx={starIdx}
                 onPrev={prevStar}
                 onNext={nextStar}
@@ -1175,9 +949,18 @@ export default function GalaxyView() {
               />
             ) : null}
           </View>
-        </SafeAreaView>
+        </ScreenContainer>
 
         <BottomNavigationBar activeTab="galaxy" />
+
+        <GalaxyFilterModal
+          visible={filterVisible}
+          draft={filterDraft}
+          clusterOptions={clusterOptions}
+          onChange={setFilterDraft}
+          onApply={applyFilter}
+          onClose={() => setFilterVisible(false)}
+        />
       </ResponsiveScreen>
     </StylesProvider>
   );
@@ -1186,89 +969,171 @@ export default function GalaxyView() {
 // ─── Styles ────────────────────────────────────────────────────────────────
 
 const GALAXY_STYLE_DEF = {
-  root: {
-    flex: 1,
-    backgroundColor: COLORS.bgDeep,
-    overflow: 'hidden',
-  },
   flex: {
     flex: 1,
   },
-  starDot: {
-    position: 'absolute',
-    backgroundColor: '#ffffff',
-  },
-
-  nebulaPurple: {
-    position: 'absolute',
-    width: 280,
-    height: 280,
-    top: 120,
-    left: -60,
-    borderRadius: 140,
-    backgroundColor: 'rgba(138,43,226,0.06)',
-  },
-  nebulaCyan: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    top: 350,
-    right: -40,
-    borderRadius: 100,
-    backgroundColor: 'rgba(0,245,255,0.05)',
-  },
-  nebulaViolet: {
-    position: 'absolute',
-    width: 180,
-    height: 180,
-    bottom: 180,
-    left: 60,
-    borderRadius: 90,
-    backgroundColor: 'rgba(100,60,180,0.06)',
+  screenContent: {
+    flexGrow: 1,
+    paddingBottom: 86,
   },
 
   header: {
-    paddingHorizontal: 20,
     paddingBottom: 8,
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    letterSpacing: -0.3,
+    fontFamily: FontFamily.bold,
+    fontSize: 25,
+    color: CREAM,
+    letterSpacing: -0.5,
   },
   headerSubtitle: {
-    marginTop: 2,
-    fontSize: 12,
-    color: COLORS.textSubtitle,
+    marginTop: 4,
+    fontFamily: FontFamily.regular,
+    fontSize: 15,
+    color: CREAM,
+    letterSpacing: -0.15,
   },
 
   filterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 20,
     paddingVertical: 8,
   },
   filterPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: CREAM_FILL,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: CREAM_BORDER,
+  },
+  filterPillIcon: {
+    fontFamily: FontFamily.regular,
+    fontSize: 15,
+    color: CREAM_ACTIVE,
+    lineHeight: 18,
   },
   filterPillText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
+    fontFamily: FontFamily.regular,
+    fontSize: 15,
+    color: CREAM_ACTIVE,
   },
-  filterCaret: {
-    fontSize: 10,
-    color: COLORS.textSecondary,
-    opacity: 0.7,
+
+  filterOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  filterDimLayer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: FILTER_DIM,
+  },
+  filterScrimTap: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  filterSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 32,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: CREAM_BORDER,
+    borderBottomWidth: 0,
+    backgroundColor: CREAM_FILL,
+    zIndex: 2,
+  },
+  filterSheetTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: 18,
+    color: CREAM,
+    marginBottom: 20,
+  },
+  filterSectionLabel: {
+    fontFamily: FontFamily.medium,
+    fontSize: 13,
+    color: withOpacity(CREAM, 0.75),
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  filterChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: CREAM_FILL,
+    borderWidth: 1,
+    borderColor: CREAM_BORDER,
+  },
+  filterChipSelected: {
+    backgroundColor: withOpacity(Palette.cream, 0.45),
+    borderColor: CREAM_BORDER,
+  },
+  filterChipText: {
+    fontFamily: FontFamily.regular,
+    fontSize: 13,
+    color: withOpacity(CREAM, 0.55),
+  },
+  filterChipTextSelected: {
+    color: CREAM,
+    fontFamily: FontFamily.medium,
+  },
+  filterApplyBtn: {
+    marginTop: 8,
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: 'center',
+    backgroundColor: CREAM_FILL,
+    borderWidth: 1,
+    borderColor: CREAM_BORDER,
+  },
+  filterApplyBtnText: {
+    fontFamily: FontFamily.medium,
+    fontSize: 15,
+    color: CREAM_ACTIVE,
+  },
+
+  emptyGallery: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    paddingBottom: 120,
+  },
+  emptyGalleryText: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    color: withOpacity(CREAM, 0.55),
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  loadingState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 80,
+  },
+  retryBtn: {
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: Radii.button,
+    borderWidth: 1,
+    borderColor: CREAM_BORDER,
+    backgroundColor: CREAM_FILL,
+  },
+  retryBtnText: {
+    fontFamily: FontFamily.medium,
+    fontSize: 15,
+    color: CREAM,
   },
 
   content: {
@@ -1277,8 +1142,7 @@ const GALAXY_STYLE_DEF = {
   },
 
   galleryList: {
-    paddingHorizontal: 16,
-    paddingBottom: 120,
+    paddingBottom: 16,
   },
   galleryRow: {
     gap: 12,
@@ -1288,8 +1152,8 @@ const GALAXY_STYLE_DEF = {
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: COLORS.borderSubtle,
-    backgroundColor: 'rgba(10,15,45,0.9)',
+    borderColor: CREAM_BORDER,
+    backgroundColor: withOpacity(CREAM, 0.08),
   },
   galleryGraphic: {
     alignItems: 'center',
@@ -1304,59 +1168,65 @@ const GALAXY_STYLE_DEF = {
   galleryCardBody: {
     paddingHorizontal: 10,
     paddingVertical: 10,
-  },
-  galleryCardRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
     gap: 6,
   },
+  galleryCardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 4,
+  },
   galleryCardTitle: {
-    flex: 1,
+    fontFamily: FontFamily.regular,
     fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.textPrimary,
+    color: CREAM,
     lineHeight: 16,
   },
+  galleryCardTitleRest: {
+    fontFamily: FontFamily.regular,
+    color: CREAM,
+  },
   galleryCardDate: {
+    fontFamily: FontFamily.regular,
     fontSize: 10,
-    color: COLORS.textMuted,
-    textAlign: 'right',
-    flexShrink: 0,
-    maxWidth: 72,
+    color: CREAM_FADED,
     lineHeight: 14,
+    textAlign: 'right',
+  },
+  galleryCardStarIcon: {
+    width: 18,
+    height: 18,
+    opacity: 0.85,
   },
 
   detailScroll: {
-    paddingBottom: 120,
+    paddingBottom: 16,
   },
   detailTopBar: {
-    paddingHorizontal: 12,
     paddingTop: 4,
     paddingBottom: 4,
     alignItems: 'flex-start',
+    marginLeft: -4,
   },
   backIconBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
+    width: 48,
+    height: 48,
+    alignItems: 'flex-start',
     justifyContent: 'center',
   },
   clusterHeader: {
     alignItems: 'center',
-    paddingTop: 8,
-    paddingBottom: 16,
-  },
-  clusterName: {
-    marginTop: 4,
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
+    paddingTop: 4,
+    paddingBottom: 12,
   },
   clusterBirth: {
-    marginTop: 2,
+    fontFamily: FontFamily.regular,
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: CREAM,
+    textAlign: 'center',
+  },
+  clusterBirthTop: {
+    marginTop: 6,
   },
 
   viewerRow: {
@@ -1366,21 +1236,13 @@ const GALAXY_STYLE_DEF = {
     paddingHorizontal: 16,
   },
   arrowBtn: {
-    width: 36,
-    height: 36,
+    width: 64,
+    height: 64,
     alignItems: 'center',
     justifyContent: 'center',
   },
   arrowDisabled: {
     opacity: 0.35,
-  },
-  arrowText: {
-    fontSize: 28,
-    color: COLORS.textSecondary,
-    lineHeight: 32,
-  },
-  arrowTextDisabled: {
-    color: 'rgba(108,122,137,0.45)',
   },
 
   constFrame: {
@@ -1389,9 +1251,9 @@ const GALAXY_STYLE_DEF = {
     borderRadius: 95,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(20,28,70,0.55)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,215,100,0.2)',
+    backgroundColor: withOpacity(CREAM, 0.06),
+    borderWidth: 1.5,
+    borderColor: CREAM_BORDER,
   },
   starFrame: {
     width: 190,
@@ -1399,9 +1261,9 @@ const GALAXY_STYLE_DEF = {
     borderRadius: 95,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,60,100,0.35)',
-    borderWidth: 1,
-    borderColor: 'rgba(0,245,255,0.2)',
+    backgroundColor: withOpacity(CREAM, 0.06),
+    borderWidth: 1.5,
+    borderColor: CREAM_BORDER,
   },
 
   detailInfo: {
@@ -1409,79 +1271,109 @@ const GALAXY_STYLE_DEF = {
     marginTop: 20,
   },
   detailTitle: {
+    fontFamily: FontFamily.bold,
     fontSize: 17,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
+    color: CREAM,
     textAlign: 'center',
   },
   detailSub: {
-    marginTop: 4,
-    fontSize: 13,
-    color: COLORS.textSecondary,
+    marginTop: 6,
+    fontFamily: FontFamily.regular,
+    fontSize: 12,
+    color: CREAM,
     textAlign: 'center',
+    lineHeight: 18,
+  },
+  detailSubMuted: {
+    marginTop: 6,
+    fontFamily: FontFamily.regular,
+    fontSize: 12,
+    color: CREAM_FADED,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 
-  tagList: {
-    marginTop: 16,
-    gap: 8,
+  starTagList: {
+    marginTop: 20,
+    alignItems: 'center',
+    gap: 6,
   },
-  tagRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  tagLabel: {
-    width: 80,
-    fontSize: 12,
-    color: COLORS.textMuted,
-    paddingTop: 6,
-  },
-  tagPill: {
-    flexShrink: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  tagValue: {
+  starTagItem: {
+    fontFamily: FontFamily.regular,
     fontSize: 13,
-    color: '#E0E8F0',
+    color: CREAM,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 
   ctaBlock: {
     paddingHorizontal: 20,
-    marginTop: 24,
+    marginTop: 28,
     marginBottom: 16,
+    alignItems: 'center',
   },
-  primaryBtn: {
-    width: '100%',
-    paddingVertical: 14,
-    borderRadius: 16,
+  ctaBtnWrap: {
+    alignItems: 'center',
+  },
+
+  recordOverlay: {
+    flex: 1,
+    backgroundColor: FILTER_DIM,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(0,245,255,0.4)',
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.cyan,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.25,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 4,
-      },
-      default: {},
-    }),
+    paddingHorizontal: 24,
   },
-  primaryBtnText: {
+  recordCardWrap: {
+    width: '100%',
+    maxWidth: 340,
+  },
+  recordCard: {
+    borderWidth: 1,
+    borderColor: CREAM_BORDER,
+    borderRadius: 20,
+    paddingTop: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    backgroundColor: CREAM_FILL,
+    width: '100%',
+  },
+  recordTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: 16,
+    color: CREAM,
+    marginBottom: 12,
+  },
+  recordDivider: {
+    height: 1,
+    backgroundColor: CREAM_BORDER,
+    marginBottom: 16,
+  },
+  recordScrollContent: {
+    flexGrow: 0,
+  },
+  recordBody: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    color: withOpacity(CREAM, 0.9),
+    lineHeight: 22,
+  },
+  recordConfirmBtn: {
+    marginTop: 16,
+    alignSelf: 'center',
+    minWidth: 140,
+    paddingHorizontal: 36,
+    paddingVertical: 11,
+    borderRadius: Radii.button,
+    backgroundColor: CREAM_FILL_45,
+    borderWidth: 1,
+    borderColor: CREAM_BORDER,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recordConfirmBtnText: {
+    fontFamily: FontFamily.regular,
     fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    zIndex: 1,
+    color: CREAM_ACTIVE,
   },
 } as const;
 
