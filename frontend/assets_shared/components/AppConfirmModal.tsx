@@ -32,7 +32,6 @@ const STYLE_DEF = {
   },
   message: {
     textAlign: 'center',
-    opacity: 0.75,
     lineHeight: 22,
     marginBottom: 24,
   },

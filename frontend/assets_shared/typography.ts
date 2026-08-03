@@ -4,6 +4,8 @@ import { Palette } from './colors';
 
 /** expo-font 로드 후 사용할 A2Z 패밀리명 */
 export const FontFamily = {
+  extraLight: 'A2Z-ExtraLight',
+  light: 'A2Z-Light',
   regular: 'A2Z-Regular',
   medium: 'A2Z-Medium',
   bold: 'A2Z-Bold',

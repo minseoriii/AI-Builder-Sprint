@@ -580,9 +580,9 @@ const STAR_TAGS_ORDER: { key: keyof StarTags; label: string }[] = [
 const COLORS = {
   bgDeep: '#060812',
   textPrimary: '#FFFFFF',
-  textSecondary: '#A0AAB0',
-  textMuted: '#6C7A89',
-  textSubtitle: '#6C8AA0',
+  textSecondary: '#F8EEC1',
+  textMuted: '#F8EEC1',
+  textSubtitle: '#F8EEC1',
   cyan: '#00F5FF',
   gold: '#FFD966',
   purple: '#8A2BE2',
@@ -1263,12 +1263,15 @@ const GALAXY_STYLE_DEF = {
   },
   filterPillText: {
     fontSize: 12,
+    lineHeight: 12,
     color: COLORS.textSecondary,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   filterCaret: {
     fontSize: 10,
     color: COLORS.textSecondary,
-    opacity: 0.7,
   },
 
   content: {
@@ -1380,7 +1383,8 @@ const GALAXY_STYLE_DEF = {
     lineHeight: 32,
   },
   arrowTextDisabled: {
-    color: 'rgba(108,122,137,0.45)',
+    color: '#F8EEC1',
+    opacity: 0.45,
   },
 
   constFrame: {
@@ -1447,7 +1451,7 @@ const GALAXY_STYLE_DEF = {
   },
   tagValue: {
     fontSize: 13,
-    color: '#E0E8F0',
+    color: '#F8EEC1',
   },
 
   ctaBlock: {
@@ -1479,8 +1483,12 @@ const GALAXY_STYLE_DEF = {
   },
   primaryBtnText: {
     fontSize: 15,
+    lineHeight: 15,
     fontWeight: '600',
     color: COLORS.textPrimary,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
     zIndex: 1,
   },
 } as const;

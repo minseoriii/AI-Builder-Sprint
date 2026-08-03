@@ -61,6 +61,14 @@ function messageForErrorCode(code: string | undefined, fallback: string): string
       return 'AI 분석 결과를 처리하지 못했습니다. 문장을 조금 다르게 입력한 뒤 다시 시도해 주세요.';
     case 'AI_SERVICE_ERROR':
       return 'AI 서비스를 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.';
+    case 'GALAXY_REPORT_NOT_FOUND':
+      return '관측 리포트를 찾을 수 없습니다.';
+    case 'INVALID_SEASON':
+      return '유효하지 않은 계절입니다.';
+    case 'FUTURE_SEASON':
+      return '아직 시작되지 않은 계절의 리포트는 생성할 수 없습니다.';
+    case 'INVALID_REFLECTION':
+      return '종합 소감을 확인해 주세요. (1~500자)';
     default:
       return fallback;
   }

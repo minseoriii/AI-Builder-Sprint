@@ -27,7 +27,6 @@ const STYLE_DEF = {
     fontSize: 22,
   },
   subtitle: {
-    opacity: 0.65,
   },
 } as const;
 
