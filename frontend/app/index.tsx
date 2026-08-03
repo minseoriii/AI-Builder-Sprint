@@ -315,7 +315,6 @@ function HomeScreen() {
                 <ValueQuote
                   style={styles.valueRow}
                   textStyle={styles.valueText}
-                  numberOfLines={2}
                 >
                   {northStarText || '나의 중심 목표를 설정해 보세요.'}
                 </ValueQuote>
@@ -420,12 +419,12 @@ const HOME_STYLE_DEF = {
   },
   valueRow: {
     marginTop: 12,
-    paddingHorizontal: ScreenLayout.horizontal,
-    maxWidth: '100%',
-    alignSelf: 'center',
+    width: '100%',
+    alignSelf: 'stretch',
   },
   valueText: {
     fontSize: 14,
+    lineHeight: 22,
     letterSpacing: -0.14,
   },
   createWrap: {

@@ -86,11 +86,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    width: '100%',
   },
   bracket: {
     width: BRACKET_W,
     height: BRACKET_H,
     position: 'relative',
+    flexShrink: 0,
   },
   starLarge: {
     position: 'absolute',
@@ -127,7 +129,9 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   text: {
+    flex: 1,
     flexShrink: 1,
+    minWidth: 0,
     fontFamily: FontFamily.regular,
     fontSize: 14,
     lineHeight: 20,
