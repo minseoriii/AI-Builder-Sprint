@@ -120,7 +120,7 @@ async function parseResponseBody(raw: string): Promise<unknown> {
 }
 
 async function apiRequest<T>(
-  method: 'GET' | 'POST' | 'PUT',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   endpointPath: string,
   body?: unknown,
   allowAuthRetry = true,
@@ -178,6 +178,11 @@ async function apiRequest<T>(
     throw error;
   }
 
+  // 204 No Content 등 본문 없는 성공 응답
+  if (response.status === 204 || data == null) {
+    return undefined as T;
+  }
+
   return data as T;
 }
 
@@ -185,10 +190,17 @@ export async function apiGet<T>(endpointPath: string): Promise<T> {
   return apiRequest<T>('GET', endpointPath);
 }
 
-export async function apiPost<T>(endpointPath: string, body: unknown): Promise<T> {
+export async function apiPost<T>(
+  endpointPath: string,
+  body?: unknown,
+): Promise<T> {
   return apiRequest<T>('POST', endpointPath, body);
 }
 
 export async function apiPut<T>(endpointPath: string, body: unknown): Promise<T> {
   return apiRequest<T>('PUT', endpointPath, body);
+}
+
+export async function apiDelete<T = void>(endpointPath: string): Promise<T> {
+  return apiRequest<T>('DELETE', endpointPath);
 }

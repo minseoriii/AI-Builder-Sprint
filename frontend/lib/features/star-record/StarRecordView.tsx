@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -451,9 +451,11 @@ function BottomButton({
 function BaseScreen({
   onNext,
   onBack,
+  fromComet,
 }: {
   onNext: (text: string) => void;
   onBack: () => void;
+  fromComet?: boolean;
 }) {
   const { width, height } = useWindowDimensions();
   const { x, y } = scaleDesign(width, height);
@@ -485,7 +487,9 @@ function BaseScreen({
           width: x(TITLE_MAX_WIDTH),
         }}
       >
-        오늘의 관측을 기록해보세요.
+        {fromComet
+          ? '혜성을 관측한 기록을 남겨보세요.'
+          : '오늘의 관측을 기록해보세요.'}
       </AppText>
 
       <AppText
@@ -927,6 +931,9 @@ function LoadingScreen({ message }: { message: string }) {
 
 export default function StarRecordView() {
   const router = useRouter();
+  const { source } = useLocalSearchParams<{ source?: string | string[] }>();
+  const sourceValue = Array.isArray(source) ? source[0] : source;
+  const fromComet = sourceValue === 'comet';
   const { width, height } = useWindowDimensions();
   const [screen, setScreen] = useState<Screen>('base');
   const [loadingMessage, setLoadingMessage] = useState('빛의 속도로 분석하는 중...');
@@ -1115,7 +1122,11 @@ export default function StarRecordView() {
       >
         <ScreenContainer withTopPadding={false} withHorizontalPadding={false}>
           {screen === 'base' && (
-            <BaseScreen onNext={handleBaseNext} onBack={() => router.back()} />
+            <BaseScreen
+              onNext={handleBaseNext}
+              onBack={() => router.back()}
+              fromComet={fromComet}
+            />
           )}
           {screen === 'loading' && <LoadingScreen message={loadingMessage} />}
           {screen === 'supplement' && (
