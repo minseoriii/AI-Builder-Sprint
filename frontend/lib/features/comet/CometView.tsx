@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -7,33 +7,32 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, {
-  Circle,
-  Defs,
-  Line,
-  Path,
-  RadialGradient,
-  Stop,
-} from 'react-native-svg';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 
 import {
   AppText,
   AutoRefreshOnFocus,
-  BackButton,
+  Background,
   BottomNavigationBar,
   BottomNavigationBarDimensions,
+  FontFamily,
+  ImageAssets,
   Palette,
   PrimaryButton,
   ResponsiveScreen,
   TagButton,
   bottomNavigationInset,
+  scaleDesign,
   showConnectionError,
   useResponsive,
   useResponsiveStyles,
@@ -104,9 +103,16 @@ const DAYS_IN_MONTH: Record<number, number> = {
   12: 31,
 };
 
-const GOLD = '#e8c547';
-const GOLD_SOFT = '#ffe566';
-const GOLD_TITLE = '#ffe8a3';
+const CHOICE_LAYOUT = {
+  titleX: 101,
+  titleY: 270,
+  subtitleX: 96,
+  subtitleY: 360,
+  aiButtonX: 20,
+  aiButtonY: 540,
+  manualButtonX: 20,
+  manualButtonY: 614,
+} as const;
 
 function reportCometApiError(label: string, error: unknown, onRetry?: () => void) {
   logHandledApiError(label, error);
@@ -125,13 +131,32 @@ function formatCometTargetDate(item: CometItem) {
   return formatDate(year, month, day);
 }
 
+const CLUSTER_ORDER_COLORS = [
+  Palette.cluster1,
+  Palette.cluster2,
+  Palette.cluster3,
+  Palette.cluster4,
+  Palette.cluster5,
+] as const;
+
+function clusterColorFor(
+  category: string,
+  userClusters: string[],
+): string {
+  const index = userClusters.indexOf(category);
+  if (index >= 0 && index < CLUSTER_ORDER_COLORS.length) {
+    return CLUSTER_ORDER_COLORS[index];
+  }
+  return Palette.cream;
+}
+
 function validateDate(year: string, month: string, day: string): DateError {
   const errors: DateError = {};
   const isNum = (v: string) => /^\d+$/.test(v.trim());
 
-  if (year && !isNum(year)) errors.year = '! 숫자만 입력 가능합니다.';
-  if (month && !isNum(month)) errors.month = '! 숫자만 입력 가능합니다.';
-  if (day && !isNum(day)) errors.day = '! 숫자만 입력 가능합니다.';
+  if (year && !isNum(year)) errors.year = '숫자만 입력 가능합니다.';
+  if (month && !isNum(month)) errors.month = '숫자만 입력 가능합니다.';
+  if (day && !isNum(day)) errors.day = '숫자만 입력 가능합니다.';
 
   const allNumeric =
     year && month && day && isNum(year) && isNum(month) && isNum(day);
@@ -141,20 +166,20 @@ function validateDate(year: string, month: string, day: string): DateError {
     const d = parseInt(day, 10);
 
     if (m < 1 || m > 12) {
-      errors.date = '! 유효한 날짜를 선택해주세요.';
+      errors.date = '유효한 날짜를 선택해주세요.';
       return errors;
     }
 
     const maxDay = DAYS_IN_MONTH[m];
     if (d < 1 || d > maxDay) {
-      errors.date = '! 유효한 날짜를 선택해주세요.';
+      errors.date = '유효한 날짜를 선택해주세요.';
       return errors;
     }
 
     const entered = new Date(y, m - 1, d);
     const min = new Date(2026, 7, 3); // 2026-08-03
     if (entered < min) {
-      errors.date = '! 2026년 8월 3일 이후로 선택할 수 있습니다.';
+      errors.date = '2026년 8월 3일 이후로 선택할 수 있습니다.';
     }
   }
   return errors;
@@ -186,6 +211,207 @@ function recommendationToForm(rec: CometRecommendationItem): FormState {
   };
 }
 
+/** 천문연구소(Observatory) 헤더·세그먼트 탭과 동일 스펙 */
+const labChromeStyles = StyleSheet.create({
+  pageHeader: {
+    paddingTop: 38,
+    paddingHorizontal: 20,
+  },
+  pageTitle: {
+    fontFamily: FontFamily.medium,
+    fontSize: 22,
+    lineHeight: 30,
+    letterSpacing: -0.3,
+    color: Palette.cream,
+  },
+  tabsPad: {
+    paddingTop: 14,
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
+  segmentWrap: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  segmentBtn: {
+    flex: 1,
+    height: 40,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    borderWidth: 1,
+  },
+  segmentBtnActive: {
+    backgroundColor: withOpacity(Palette.cream, 0.15),
+    borderColor: withOpacity(Palette.cream, 0.6),
+  },
+  segmentBtnInactive: {
+    backgroundColor: withOpacity('#0A1833', 0.45),
+    borderColor: withOpacity(Palette.cream, 0.25),
+  },
+  segmentLabel: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    lineHeight: 14,
+    letterSpacing: -0.2,
+    color: Palette.cream,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
+  segmentLabelActive: {
+    fontFamily: FontFamily.medium,
+    color: Palette.cream,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+  },
+});
+
+/** 별 생성하기(StarRecord) chromeHeader와 동일 스펙 */
+const registerHeaderStyles = StyleSheet.create({
+  wrap: {
+    paddingTop: 17,
+  },
+  row: {
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  back: {
+    position: 'absolute',
+    left: 16,
+    top: 0,
+    bottom: 0,
+    width: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  title: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    color: '#F8EEC1',
+    textAlign: 'center',
+  },
+  divider: {
+    height: 1,
+    width: '92%',
+    marginHorizontal: 16,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(248,238,193,0.15)',
+  },
+});
+
+/** 혜성 등록 선택 화면 타이포 — 별 기록 baseTitle / baseSubtitle과 동일 */
+const choiceChromeStyles = StyleSheet.create({
+  title: {
+    position: 'absolute',
+    fontFamily: FontFamily.medium,
+    fontSize: 18.72, // 23.4 * 0.8
+    color: '#FFF9DD',
+    textAlign: 'center',
+  },
+  subtitle: {
+    position: 'absolute',
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: Palette.cream,
+    textAlign: 'center',
+  },
+});
+
+/** 혜성 등록 완료 화면 — 별 기록 baseTitle / baseSubtitle과 동일 */
+const completeChromeStyles = StyleSheet.create({
+  title: {
+    fontFamily: FontFamily.medium,
+    fontSize: 18,
+    color: '#FFF9DD',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: Palette.cream,
+    textAlign: 'center',
+  },
+  name: {
+    fontFamily: FontFamily.medium,
+    fontSize: 17.6,
+    color: Palette.cream,
+    textAlign: 'center',
+  },
+  activity: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    color: withOpacity(Palette.cream, 0.7),
+    textAlign: 'center',
+  },
+  cluster: {
+    fontFamily: FontFamily.medium,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  date: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    color: withOpacity(Palette.cream, 0.55),
+    textAlign: 'center',
+  },
+});
+
+function RegisterHeaderChevron() {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M15 19l-7-7 7-7"
+        stroke="rgba(248,238,193,0.8)"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/** 별 생성하기 입력 경고 아이콘과 동일 */
+function WarningIcon() {
+  return (
+    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 3L22 20H2L12 3Z"
+        stroke="#F8EEC1"
+        strokeWidth={1.6}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      <Path d="M12 10v4" stroke="#F8EEC1" strokeWidth={1.6} strokeLinecap="round" />
+      <Path
+        d="M12 16.6v.01"
+        stroke="#F8EEC1"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
+function FieldError({ message }: { message: string }) {
+  const styles = useResponsiveStyles(STYLE_DEF);
+  return (
+    <View style={styles.fieldErrorRow}>
+      <WarningIcon />
+      <AppText style={styles.fieldErrorText}>{message}</AppText>
+    </View>
+  );
+}
+
 // ─── Style definitions ───────────────────────────────────────────────────────
 
 const STYLE_DEF = {
@@ -195,51 +421,14 @@ const STYLE_DEF = {
   flex: {
     flex: 1,
   },
-  pageHeader: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  pageTitle: {
-    fontSize: 24,
-  },
-  segmentWrap: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 16,
-    padding: 4,
-    borderRadius: 999,
-    backgroundColor: withOpacity('#FFFFFF', 0.06),
-    borderWidth: 1,
-    borderColor: withOpacity('#FFFFFF', 0.1),
-  },
-  segmentBtn: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  segmentBtnActive: {
-    backgroundColor: withOpacity('#FFFFFF', 0.18),
-    borderColor: withOpacity('#FFFFFF', 0.25),
-  },
-  segmentLabel: {
-    fontSize: 13,
-    color: withOpacity('#FFFFFF', 0.45),
-  },
-  segmentLabelActive: {
-    color: Palette.cream,
-  },
   emptyCenter: {
+    flexGrow: 1,
+    minHeight: '100%',
+  },
+  emptyWrap: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 28,
-    paddingBottom: 100,
+    alignItems: 'center',
   },
   emptyText: {
     textAlign: 'center',
@@ -255,9 +444,6 @@ const STYLE_DEF = {
     position: 'absolute',
     left: 0,
     right: 0,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
     alignItems: 'center',
   },
   card: {
@@ -281,9 +467,9 @@ const STYLE_DEF = {
     gap: 6,
     flex: 1,
   },
-  cardStar: {
-    color: GOLD,
-    fontSize: 12,
+  cardStarIcon: {
+    width: 14,
+    height: 14,
   },
   cardName: {
     fontSize: 14,
@@ -297,7 +483,6 @@ const STYLE_DEF = {
   },
   clusterBadgeText: {
     fontSize: 11,
-    color: withOpacity(Palette.cream, 0.7),
   },
   cardActivity: {
     fontSize: 12,
@@ -311,107 +496,39 @@ const STYLE_DEF = {
     textAlign: 'right',
     marginBottom: 12,
   },
-  cardAction: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    paddingVertical: 11,
-    backgroundColor: withOpacity('#FFFFFF', 0.1),
-    borderWidth: 1,
-    borderColor: withOpacity('#FFFFFF', 0.18),
-  },
-  cardActionFailed: {
-    backgroundColor: 'rgba(180,60,60,0.25)',
-    borderColor: 'rgba(220,80,80,0.4)',
-  },
-  cardActionLabel: {
-    fontSize: 13,
-    color: withOpacity(Palette.cream, 0.85),
-  },
-  cardActionLabelFailed: {
-    color: '#ff8a8a',
-  },
-  subBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    minHeight: 48,
-  },
-  subBarTitle: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    fontSize: 13,
-    color: withOpacity(Palette.cream, 0.7),
-  },
-  subBarDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: withOpacity('#FFFFFF', 0.12),
-  },
-  choiceBody: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    gap: 32,
-  },
-  choiceTitle: {
-    fontSize: 24,
-    textAlign: 'center',
-    lineHeight: 34,
-    color: GOLD_TITLE,
-    marginBottom: 20,
-  },
-  choiceSub: {
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 22,
-    color: withOpacity(Palette.cream, 0.6),
-  },
-  choiceButtons: {
+  cardPrimaryBtn: {
     width: '100%',
-    gap: 12,
-  },
-  choiceBtn: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 999,
-    paddingVertical: 16,
-    backgroundColor: 'rgba(25,40,100,0.9)',
-    borderWidth: 1,
-    borderColor: withOpacity('#FFFFFF', 0.2),
-  },
-  choiceBtnLabel: {
-    fontSize: 14,
+    alignSelf: 'stretch',
   },
   formScroll: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 9,
   },
   aiGuide: {
-    marginBottom: 24,
+    marginTop: 25,
+    marginBottom: 8,
   },
   aiGuideMain: {
-    fontSize: 14,
-    lineHeight: 22,
+    fontFamily: FontFamily.medium,
+    fontSize: 15.295, // 16.1 * 0.95
+    lineHeight: 24.035,
     color: withOpacity(Palette.cream, 0.8),
     marginBottom: 6,
+    textAlign: 'center',
   },
   aiGuideSub: {
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 13.8,
+    lineHeight: 20.7,
     color: withOpacity(Palette.cream, 0.45),
+    textAlign: 'center',
   },
   fieldBlock: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   fieldLabel: {
     fontSize: 13,
-    color: withOpacity(Palette.cream, 0.7),
+    color: '#F8EEC1',
     marginBottom: 8,
   },
   touchInput: {
@@ -435,10 +552,16 @@ const STYLE_DEF = {
     fontSize: 12,
     color: withOpacity(Palette.cream, 0.3),
   },
-  fieldError: {
-    fontSize: 11,
-    color: '#ff8a8a',
+  fieldErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginTop: 6,
+  },
+  fieldErrorText: {
+    fontFamily: FontFamily.regular,
+    fontSize: 11,
+    color: '#F8EEC1',
   },
   clusterRow: {
     flexDirection: 'row',
@@ -475,7 +598,7 @@ const STYLE_DEF = {
   },
   formBottomCta: {
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 17,
     paddingBottom: 28,
     alignItems: 'center',
   },
@@ -484,44 +607,16 @@ const STYLE_DEF = {
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
-    gap: 28,
+    gap: 24,
   },
-  completeTitle: {
-    fontSize: 22,
-    textAlign: 'center',
-    marginBottom: 8,
+  completeIcon: {
+    width: 96,
+    height: 96,
   },
-  completeSub: {
-    fontSize: 14,
-    textAlign: 'center',
-    color: withOpacity(Palette.cream, 0.55),
-  },
-  summaryCard: {
+  summaryList: {
     width: '100%',
-    borderRadius: 16,
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    backgroundColor: withOpacity('#FFFFFF', 0.06),
-    borderWidth: 1,
-    borderColor: withOpacity('#FFFFFF', 0.12),
-  },
-  summaryName: {
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  summaryActivity: {
-    fontSize: 14,
-    color: withOpacity(Palette.cream, 0.6),
-    marginBottom: 4,
-  },
-  summaryCluster: {
-    fontSize: 14,
-    color: GOLD,
-    marginBottom: 12,
-  },
-  summaryDate: {
-    fontSize: 14,
-    color: withOpacity(Palette.cream, 0.45),
+    alignItems: 'center',
+    gap: 8,
   },
   completeBottom: {
     paddingHorizontal: 24,
@@ -572,11 +667,6 @@ const STYLE_DEF = {
   modalConfirmLabel: {
     fontSize: 14,
   },
-  starDot: {
-    position: 'absolute',
-    borderRadius: 999,
-    backgroundColor: '#FFFFFF',
-  },
   loadingOverlay: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -597,107 +687,27 @@ const STYLE_DEF = {
     fontSize: 12,
     color: withOpacity(Palette.cream, 0.4),
   },
-  cardActionDisabled: {
-    opacity: 0.55,
-  },
 } as const;
-
-// ─── Icons ───────────────────────────────────────────────────────────────────
-
-function IconComet({ size = 64 }: { size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 64 64" fill="none">
-      <Defs>
-        <RadialGradient id="cometGlow" cx="50%" cy="50%" r="50%">
-          <Stop offset="0%" stopColor="#ffe066" stopOpacity="1" />
-          <Stop offset="100%" stopColor="#e8c547" stopOpacity="0" />
-        </RadialGradient>
-      </Defs>
-      <Line
-        x1="12"
-        y1="32"
-        x2="36"
-        y2="32"
-        stroke={GOLD}
-        strokeWidth="1"
-        strokeOpacity="0.3"
-        strokeLinecap="round"
-      />
-      <Line
-        x1="16"
-        y1="26"
-        x2="36"
-        y2="30"
-        stroke={GOLD}
-        strokeWidth="0.8"
-        strokeOpacity="0.2"
-        strokeLinecap="round"
-      />
-      <Line
-        x1="16"
-        y1="38"
-        x2="36"
-        y2="34"
-        stroke={GOLD}
-        strokeWidth="0.8"
-        strokeOpacity="0.2"
-        strokeLinecap="round"
-      />
-      <Path d="M40 20L43 32L40 44L37 32L40 20Z" fill={GOLD_SOFT} />
-      <Path d="M28 32L40 29L52 32L40 35L28 32Z" fill={GOLD_SOFT} />
-      <Circle cx="40" cy="32" r="3" fill="white" />
-    </Svg>
-  );
-}
 
 // ─── Shared UI ───────────────────────────────────────────────────────────────
 
-function StarDots() {
-  const dots = useMemo(
-    () =>
-      Array.from({ length: 48 }, (_, i) => ({
-        id: i,
-        top: ((i * 37) % 100) + (i % 7) * 0.3,
-        left: ((i * 53) % 100) + (i % 5) * 0.2,
-        size: (i % 3) * 0.5 + 0.8,
-        opacity: ((i * 13) % 50) / 100 + 0.2,
-      })),
-    [],
-  );
-
-  const styles = useResponsiveStyles(STYLE_DEF);
-
-  return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {dots.map((d) => (
-        <View
-          key={d.id}
-          style={[
-            styles.starDot,
-            {
-              top: `${d.top}%`,
-              left: `${d.left}%`,
-              width: d.size,
-              height: d.size,
-              opacity: d.opacity,
-            },
-          ]}
-        />
-      ))}
-    </View>
-  );
-}
-
 function SubPageBar({ title, onBack }: { title: string; onBack: () => void }) {
-  const styles = useResponsiveStyles(STYLE_DEF);
   return (
-    <>
-      <View style={styles.subBar}>
-        <AppText style={styles.subBarTitle}>{title}</AppText>
-        <BackButton onPress={onBack} iconSize={24} />
+    <View style={registerHeaderStyles.wrap}>
+      <View style={registerHeaderStyles.row}>
+        <TouchableOpacity
+          onPress={onBack}
+          style={registerHeaderStyles.back}
+          activeOpacity={0.7}
+          hitSlop={8}
+          accessibilityLabel="뒤로가기"
+        >
+          <RegisterHeaderChevron />
+        </TouchableOpacity>
+        <AppText style={registerHeaderStyles.title}>{title}</AppText>
       </View>
-      <View style={styles.subBarDivider} />
-    </>
+      <View style={registerHeaderStyles.divider} />
+    </View>
   );
 }
 
@@ -708,31 +718,38 @@ function SegmentedControl({
   tab: Tab;
   onChange: (t: Tab) => void;
 }) {
-  const styles = useResponsiveStyles(STYLE_DEF);
   return (
-    <View style={styles.segmentWrap}>
-      {(['observing', 'completed'] as Tab[]).map((t) => {
-        const active = tab === t;
-        const label = t === 'observing' ? '관측 중인 혜성' : '관측 완료된 혜성';
-        return (
-          <TouchableOpacity
-            key={t}
-            activeOpacity={0.85}
-            onPress={() => onChange(t)}
-            style={[styles.segmentBtn, active && styles.segmentBtnActive]}
-          >
-            <AppText
-              variant={active ? 'emphasis' : 'default'}
-              style={{
-                ...styles.segmentLabel,
-                ...(active ? styles.segmentLabelActive : null),
-              }}
+    <View style={labChromeStyles.tabsPad}>
+      <View style={labChromeStyles.segmentWrap}>
+        {(['observing', 'completed'] as Tab[]).map((t) => {
+          const active = tab === t;
+          const label = t === 'observing' ? '관측 중인 혜성' : '관측 완료된 혜성';
+          return (
+            <Pressable
+              key={t}
+              onPress={() => onChange(t)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              style={[
+                labChromeStyles.segmentBtn,
+                active
+                  ? labChromeStyles.segmentBtnActive
+                  : labChromeStyles.segmentBtnInactive,
+              ]}
             >
-              {label}
-            </AppText>
-          </TouchableOpacity>
-        );
-      })}
+              <Text
+                style={[
+                  labChromeStyles.segmentLabel,
+                  active && labChromeStyles.segmentLabelActive,
+                ]}
+                numberOfLines={1}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -801,6 +818,7 @@ function InputModal({
 function CometCard({
   comet,
   showObserving,
+  clusters,
   busy,
   onComplete,
   onAddToGalaxy,
@@ -808,6 +826,7 @@ function CometCard({
 }: {
   comet: CometItem;
   showObserving: boolean;
+  clusters: string[];
   busy?: boolean;
   onComplete?: (id: string) => void;
   onAddToGalaxy?: (id: string) => void;
@@ -817,19 +836,26 @@ function CometCard({
   const failed = showObserving && isCometFailed(comet);
   const starCreated = comet.record_status === 'STAR_CREATED';
   const dateLabel = formatCometTargetDate(comet);
+  const clusterColor = comet.target_category
+    ? clusterColorFor(comet.target_category, clusters)
+    : Palette.cream;
 
   return (
     <View style={styles.card}>
       <View style={styles.cardTopRow}>
         <View style={styles.cardNameRow}>
-          <AppText style={styles.cardStar}>✦</AppText>
+          <Image
+            source={ImageAssets.ic_shapestar1}
+            style={styles.cardStarIcon}
+            resizeMode="contain"
+          />
           <AppText variant="emphasis" style={styles.cardName} numberOfLines={1}>
             {comet.title}
           </AppText>
         </View>
         {comet.target_category ? (
           <View style={styles.clusterBadge}>
-            <AppText style={styles.clusterBadgeText}>
+            <AppText style={{ ...styles.clusterBadgeText, color: clusterColor }}>
               {comet.target_category}
             </AppText>
           </View>
@@ -840,48 +866,25 @@ function CometCard({
       </AppText>
       {dateLabel ? <AppText style={styles.cardDate}>{dateLabel}</AppText> : null}
       {showObserving ? (
-        <TouchableOpacity
-          activeOpacity={failed || busy ? 1 : 0.85}
+        <PrimaryButton
+          label={failed ? '관측 실패' : '관측 완료'}
+          size="medium"
           disabled={failed || busy}
-          style={[
-            styles.cardAction,
-            failed && styles.cardActionFailed,
-            busy && styles.cardActionDisabled,
-          ]}
           onPress={() => onComplete?.(comet.id)}
+          style={styles.cardPrimaryBtn}
         >
-          {busy ? (
-            <ActivityIndicator color={Palette.cream} />
-          ) : (
-            <AppText
-              variant="emphasis"
-              style={{
-                ...styles.cardActionLabel,
-                ...(failed ? styles.cardActionLabelFailed : null),
-              }}
-            >
-              {failed ? '관측 실패' : '관측 완료'}
-            </AppText>
-          )}
-        </TouchableOpacity>
+          {busy ? <ActivityIndicator color={Palette.cream} /> : undefined}
+        </PrimaryButton>
       ) : (
-        <TouchableOpacity
-          activeOpacity={starCreated || busy ? 1 : 0.85}
+        <PrimaryButton
+          label={starCreated ? '성단에 추가됨' : '성단에 추가하기'}
+          size="medium"
           disabled={starCreated || busy}
-          style={[
-            styles.cardAction,
-            (starCreated || busy) && styles.cardActionDisabled,
-          ]}
           onPress={() => onAddToGalaxy?.(comet.id)}
+          style={styles.cardPrimaryBtn}
         >
-          {busy ? (
-            <ActivityIndicator color={Palette.cream} />
-          ) : (
-            <AppText variant="emphasis" style={styles.cardActionLabel}>
-              {starCreated ? '성단에 추가됨' : '성단에 추가하기'}
-            </AppText>
-          )}
-        </TouchableOpacity>
+          {busy ? <ActivityIndicator color={Palette.cream} /> : undefined}
+        </PrimaryButton>
       )}
       {onDelete ? (
         <TouchableOpacity
@@ -954,12 +957,12 @@ function CometForm({
       cluster?: string;
       date?: string;
     } = {};
-    if (!form.name.trim()) errs.name = '! 혜성 이름의 내용을 입력해주세요.';
+    if (!form.name.trim()) errs.name = '혜성 이름의 내용을 입력해주세요.';
     if (!form.activity.trim())
-      errs.activity = '! 활동 내용의 내용을 입력해주세요.';
-    if (!form.cluster.trim()) errs.cluster = '! 성단을 선택해주세요.';
+      errs.activity = '활동 내용의 내용을 입력해주세요.';
+    if (!form.cluster.trim()) errs.cluster = '성단을 선택해주세요.';
     const dateEmpty = !form.year || !form.month || !form.day;
-    if (dateEmpty) errs.date = '! 관측 목표 날짜의 내용을 입력해주세요.';
+    if (dateEmpty) errs.date = '관측 목표 날짜의 내용을 입력해주세요.';
     if (Object.keys(errs).length > 0) {
       setFieldErrors(errs);
       return;
@@ -982,21 +985,6 @@ function CometForm({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {isAI ? (
-          <View style={styles.aiGuide}>
-            <AppText style={styles.aiGuideMain}>
-              {
-                'AI가 사용자님의 현재 은하를 분석하고\n가장 관측이 필요한 성단을 중심으로\n혜성을 추천했어요.'
-              }
-            </AppText>
-            <AppText style={styles.aiGuideSub}>
-              {
-                '추천된 혜성은 자유롭게 수정하거나\n직접 다시 구성할 수 있습니다.'
-              }
-            </AppText>
-          </View>
-        ) : null}
-
         <View style={styles.fieldBlock}>
           <AppText style={styles.fieldLabel}>혜성 이름</AppText>
           <TouchableOpacity
@@ -1012,9 +1000,7 @@ function CometForm({
               </AppText>
             )}
           </TouchableOpacity>
-          {fieldErrors.name ? (
-            <AppText style={styles.fieldError}>{fieldErrors.name}</AppText>
-          ) : null}
+          {fieldErrors.name ? <FieldError message={fieldErrors.name} /> : null}
         </View>
 
         <View style={styles.fieldBlock}>
@@ -1031,7 +1017,7 @@ function CometForm({
             ) : null}
           </TouchableOpacity>
           {fieldErrors.activity ? (
-            <AppText style={styles.fieldError}>{fieldErrors.activity}</AppText>
+            <FieldError message={fieldErrors.activity} />
           ) : null}
         </View>
 
@@ -1055,7 +1041,7 @@ function CometForm({
             })}
           </ScrollView>
           {fieldErrors.cluster ? (
-            <AppText style={styles.fieldError}>{fieldErrors.cluster}</AppText>
+            <FieldError message={fieldErrors.cluster} />
           ) : null}
         </View>
 
@@ -1088,22 +1074,27 @@ function CometForm({
             <AppText style={styles.dateUnit}>일 까지</AppText>
           </View>
 
-          {dateErrors.year ? (
-            <AppText style={styles.fieldError}>{dateErrors.year}</AppText>
-          ) : null}
-          {dateErrors.month ? (
-            <AppText style={styles.fieldError}>{dateErrors.month}</AppText>
-          ) : null}
-          {dateErrors.day ? (
-            <AppText style={styles.fieldError}>{dateErrors.day}</AppText>
-          ) : null}
-          {dateErrors.date ? (
-            <AppText style={styles.fieldError}>{dateErrors.date}</AppText>
-          ) : null}
-          {fieldErrors.date ? (
-            <AppText style={styles.fieldError}>{fieldErrors.date}</AppText>
-          ) : null}
+          {dateErrors.year ? <FieldError message={dateErrors.year} /> : null}
+          {dateErrors.month ? <FieldError message={dateErrors.month} /> : null}
+          {dateErrors.day ? <FieldError message={dateErrors.day} /> : null}
+          {dateErrors.date ? <FieldError message={dateErrors.date} /> : null}
+          {fieldErrors.date ? <FieldError message={fieldErrors.date} /> : null}
         </View>
+
+        {isAI ? (
+          <View style={styles.aiGuide}>
+            <AppText style={styles.aiGuideMain}>
+              {
+                'AI가 사용자님의 현재 은하를 분석하고\n가장 관측이 필요한 성단을 중심으로\n혜성을 추천했어요.'
+              }
+            </AppText>
+            <AppText style={styles.aiGuideSub}>
+              {
+                '추천된 혜성은 자유롭게 수정하거나\n직접 다시 구성할 수 있습니다.'
+              }
+            </AppText>
+          </View>
+        ) : null}
       </ScrollView>
 
       <LinearGradient
@@ -1155,6 +1146,9 @@ export default function CometView() {
   const router = useRouter();
   const styles = useResponsiveStyles(STYLE_DEF);
   const { scale } = useResponsive();
+  const { width, height } = useWindowDimensions();
+  const { x, y } = scaleDesign(width, height);
+  const insets = useSafeAreaInsets();
   const [refreshKey, setRefreshKey] = useState(0);
 
   const [screen, setScreen] = useState<Screen>('main');
@@ -1411,58 +1405,71 @@ export default function CometView() {
     }
   };
 
-  const renderChoice = () => (
-    <View style={styles.flex}>
-      <SubPageBar title="혜성 등록" onBack={() => setScreen('main')} />
-      <View style={styles.choiceBody}>
-        <View>
-          <AppText variant="emphasis" style={styles.choiceTitle}>
-            {'관측할 혜성을\n어떻게 등록할까요?'}
-          </AppText>
-          <AppText style={styles.choiceSub}>
-            {
-              'AI가 현재 은하 구성을 분석하여\n관측이 필요한 혜성을 추천받거나\n\n원하는 혜성을 직접 등록할 수 있습니다.'
-            }
-          </AppText>
-        </View>
-        <View style={styles.choiceButtons}>
-          <TouchableOpacity
-            activeOpacity={0.85}
-            style={[styles.choiceBtn, generatingAI && styles.cardActionDisabled]}
-            disabled={generatingAI}
-            onPress={() => void goToAI()}
-          >
-            {generatingAI ? (
-              <ActivityIndicator color={Palette.cream} />
-            ) : (
-              <AppText variant="emphasis" style={styles.choiceBtnLabel}>
-                AI 혜성 추천
-              </AppText>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            activeOpacity={0.85}
-            style={styles.choiceBtn}
-            disabled={generatingAI}
-            onPress={goToManual}
-          >
-            <AppText variant="emphasis" style={styles.choiceBtnLabel}>
-              혜성 직접 등록
-            </AppText>
-          </TouchableOpacity>
-        </View>
-      </View>
-      {generatingAI ? (
-        <View
-          style={[StyleSheet.absoluteFill, styles.loadingOverlay]}
-          pointerEvents="none"
+  const renderChoice = () => {
+    // SafeAreaView(edges top) 기준 → 전체 화면(412×917) Y에서 inset 보정
+    const topOf = (designY: number) => y(designY) - insets.top;
+
+    return (
+      <View style={styles.flex}>
+        <SubPageBar title="혜성 등록" onBack={() => setScreen('main')} />
+        <AppText
+          style={{
+            ...choiceChromeStyles.title,
+            left: x(CHOICE_LAYOUT.titleX),
+            top: topOf(CHOICE_LAYOUT.titleY),
+            width: x(412 - CHOICE_LAYOUT.titleX * 2),
+          }}
         >
-          <ActivityIndicator size="large" color={Palette.cream} />
-          <AppText style={styles.loadingText}>AI 분석 중...</AppText>
-        </View>
-      ) : null}
-    </View>
-  );
+          {'관측할 혜성을\n어떻게 등록할까요?'}
+        </AppText>
+        <AppText
+          style={{
+            ...choiceChromeStyles.subtitle,
+            left: x(CHOICE_LAYOUT.subtitleX),
+            top: topOf(CHOICE_LAYOUT.subtitleY),
+            width: x(412 - CHOICE_LAYOUT.subtitleX * 2),
+          }}
+        >
+          {
+            'AI가 현재 은하 구성을 분석하여\n관측이 필요한 혜성을 추천받거나\n\n원하는 혜성을 직접 등록할 수 있습니다.'
+          }
+        </AppText>
+        <PrimaryButton
+          label={generatingAI ? 'AI 분석 중...' : 'AI 혜성 추천'}
+          size="large"
+          disabled={generatingAI}
+          onPress={() => void goToAI()}
+          style={{
+            position: 'absolute',
+            left: x(CHOICE_LAYOUT.aiButtonX),
+            top: topOf(CHOICE_LAYOUT.aiButtonY),
+            zIndex: 2,
+          }}
+        />
+        <PrimaryButton
+          label="혜성 직접 등록"
+          size="large"
+          disabled={generatingAI}
+          onPress={goToManual}
+          style={{
+            position: 'absolute',
+            left: x(CHOICE_LAYOUT.manualButtonX),
+            top: topOf(CHOICE_LAYOUT.manualButtonY),
+            zIndex: 2,
+          }}
+        />
+        {generatingAI ? (
+          <View
+            style={[StyleSheet.absoluteFill, styles.loadingOverlay]}
+            pointerEvents="none"
+          >
+            <ActivityIndicator size="large" color={Palette.cream} />
+            <AppText style={styles.loadingText}>AI 분석 중...</AppText>
+          </View>
+        ) : null}
+      </View>
+    );
+  };
 
   const renderForm = (isAI: boolean) => (
     <CometForm
@@ -1484,84 +1491,111 @@ export default function CometView() {
     ? formatCometTargetDate(lastComet)
     : '';
 
-  const renderComplete = () => (
-    <View style={styles.flex}>
-      <View style={styles.completeBody}>
-        <View>
-          <AppText variant="emphasis" style={styles.completeTitle}>
-            관측할 혜성을 등록했어요!
-          </AppText>
-          <AppText style={styles.completeSub}>
-            혜성을 관측하고 북극성에 더 가까워져보아요.
-          </AppText>
-        </View>
-        <IconComet size={80} />
-        {lastComet ? (
-          <View style={styles.summaryCard}>
-            <AppText variant="emphasis" style={styles.summaryName}>
-              {lastComet.title}
+  const renderComplete = () => {
+    const clusterColor = lastComet
+      ? clusterColorFor(lastComet.target_category, clusters)
+      : Palette.cream;
+
+    return (
+      <View style={styles.flex}>
+        <View style={styles.completeBody}>
+          <View>
+            <AppText style={completeChromeStyles.title}>
+              관측할 혜성을 등록했어요!
             </AppText>
-            <AppText style={styles.summaryActivity}>
-              {lastComet.description ?? ''}
+            <AppText style={completeChromeStyles.subtitle}>
+              혜성을 관측하고 북극성에 더 가까워져보아요.
             </AppText>
-            {lastComet.target_category ? (
-              <AppText variant="emphasis" style={styles.summaryCluster}>
-                {lastComet.target_category}
-              </AppText>
-            ) : null}
-            {lastDate ? (
-              <AppText style={styles.summaryDate}>{lastDate}</AppText>
-            ) : null}
           </View>
-        ) : null}
+          <Image
+            source={ImageAssets.ic_shapestar0}
+            style={styles.completeIcon}
+            resizeMode="contain"
+          />
+          {lastComet ? (
+            <View style={styles.summaryList}>
+              <AppText style={completeChromeStyles.name}>
+                {lastComet.title}
+              </AppText>
+              {lastComet.description ? (
+                <AppText style={completeChromeStyles.activity}>
+                  {lastComet.description}
+                </AppText>
+              ) : null}
+              {lastComet.target_category ? (
+                <AppText
+                  style={{
+                    ...completeChromeStyles.cluster,
+                    color: clusterColor,
+                  }}
+                >
+                  {lastComet.target_category}
+                </AppText>
+              ) : null}
+              {lastDate ? (
+                <AppText style={completeChromeStyles.date}>{lastDate}</AppText>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+        <View style={styles.completeBottom}>
+          <PrimaryButton
+            label="확인"
+            size="large"
+            onPress={() => {
+              setTab('observing');
+              setScreen('main');
+              void loadTabList('observing');
+            }}
+          />
+        </View>
       </View>
-      <View style={styles.completeBottom}>
-        <PrimaryButton
-          label="확인"
-          size="large"
-          onPress={() => {
-            setTab('observing');
-            setScreen('main');
-            void loadTabList('observing');
-          }}
-        />
-      </View>
-    </View>
-  );
+    );
+  };
 
   const renderMain = () => {
     const hasObserving = observingComets.length > 0;
     const hasCompleted = completedComets.length > 0;
     const showEmpty = tab === 'observing' ? !hasObserving : !hasCompleted;
     const list = tab === 'observing' ? observingComets : completedComets;
+    const emptyMessage =
+      tab === 'observing'
+        ? '현재 관측 중인 혜성이 없습니다.\n관측할 혜성을 추천받거나 직접 관측해 보세요.'
+        : '아직 관측을 완료한 혜성이 없습니다.\n혜성을 따라가며 새로운 경험을 발견해 보세요.';
 
     return (
       <View style={styles.flex}>
-        <View style={styles.pageHeader}>
-          <AppText variant="emphasis" style={styles.pageTitle}>
-            혜성관측소
-          </AppText>
+        <View style={labChromeStyles.pageHeader}>
+          <Text style={labChromeStyles.pageTitle}>혜성관측소</Text>
         </View>
 
         <SegmentedControl tab={tab} onChange={handleTabChange} />
 
         {listLoading && showEmpty ? (
-          <View style={styles.emptyCenter}>
+          <View style={[styles.flex, { alignItems: 'center', justifyContent: 'center' }]}>
             <ActivityIndicator color={Palette.cream} />
           </View>
         ) : showEmpty ? (
-          <ScrollView
-            style={styles.flex}
-            contentContainerStyle={styles.emptyCenter}
-            refreshControl={listRefreshControl}
-            showsVerticalScrollIndicator={false}
-          >
-            <AppText style={styles.emptyText}>
-              {tab === 'observing'
-                ? '현재 관측 중인 혜성이 없습니다.\n관측할 혜성을 추천받거나 직접 관측해 보세요.'
-                : '아직 관측을 완료한 혜성이 없습니다.\n혜성을 따라가며 새로운 경험을 발견해 보세요.'}
-            </AppText>
-          </ScrollView>
+          <View style={styles.flex}>
+            <ScrollView
+              style={StyleSheet.absoluteFill}
+              contentContainerStyle={styles.emptyCenter}
+              refreshControl={listRefreshControl}
+              showsVerticalScrollIndicator={false}
+            />
+            <View
+              style={[
+                styles.emptyWrap,
+                {
+                  paddingHorizontal: x(59),
+                  paddingBottom: navInset + 88,
+                },
+              ]}
+              pointerEvents="none"
+            >
+              <AppText style={styles.emptyText}>{emptyMessage}</AppText>
+            </View>
+          </View>
         ) : (
           <ScrollView
             style={styles.flex}
@@ -1577,6 +1611,7 @@ export default function CometView() {
                 key={c.id}
                 comet={c}
                 showObserving={tab === 'observing'}
+                clusters={clusters}
                 busy={actionId === c.id}
                 onComplete={(id) => void handleCompleteComet(id)}
                 onAddToGalaxy={handleAddToGalaxy}
@@ -1586,16 +1621,13 @@ export default function CometView() {
           </ScrollView>
         )}
 
-        <LinearGradient
-          colors={['rgba(8,14,42,0)', 'rgba(8,14,42,1)']}
-          style={[styles.mainBottomCta, { bottom: navInset }]}
-        >
+        <View style={[styles.mainBottomCta, { bottom: navInset + 12 }]}>
           <PrimaryButton
             label="혜성 등록"
             size="large"
             onPress={goToRegisterChoice}
           />
-        </LinearGradient>
+        </View>
       </View>
     );
   };
@@ -1617,13 +1649,8 @@ export default function CometView() {
 
   return (
     <AutoRefreshOnFocus onRefresh={handleRefresh}>
-      <ResponsiveScreen key={refreshKey} style={{ backgroundColor: '#06101f' }}>
-        <LinearGradient
-          colors={['#0d1f48', '#081432', '#060e28']}
-          locations={[0, 0.45, 1]}
-          style={StyleSheet.absoluteFill}
-        />
-        <StarDots />
+      <ResponsiveScreen key={refreshKey} style={{ backgroundColor: '#173F72' }}>
+        <Background width={width} height={height} />
         <SafeAreaView style={styles.safe} edges={['top']}>
           {content}
         </SafeAreaView>
